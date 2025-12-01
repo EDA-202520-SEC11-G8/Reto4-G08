@@ -174,10 +174,17 @@ def print_req_1(control):
     """
         Función que imprime la solución del Requerimiento 1 en consola
     """
-    # TODO: Imprimir el resultado del requerimiento 1
-    pass
-
-
+    mapa = control["nodos"]
+    grafo = control["grafo_1"]
+    
+    p_o = input("indique punto migratorio de origen (latitud-longitud): ").split("-")
+    p_d = input("indique punto migratorio de destino (latitud-longitud): ").split("-")
+    id = (input("Indique el numero identificador del individuo: "))
+    p_o[0],p_o[1]= float(p_o[0]),float(p_o[1])
+    
+    list = l.req_1(control, p_o, p_d, id)
+    print (list)
+    
 def print_req_2(control):
     """
         Función que imprime la solución del Requerimiento 2 en consola

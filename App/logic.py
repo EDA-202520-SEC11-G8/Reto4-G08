@@ -7,6 +7,7 @@ from datetime import datetime
 from DataStructures.List import array_list as lt
 from DataStructures.Map import map_linear_probing as mp
 from DataStructures.Graph import digraph as gp
+from DataStructures.Graph import dfs as dfs
 
 
 # =============================================================================
@@ -353,12 +354,25 @@ def buscar_nodo_por_id(nodos, nodo_id):
             
 # Funciones de consulta sobre el catálogo
 
-def req_1(catalog):
+def req_1(catalog, p_o, p_d, id):
     """
     Retorna el resultado del requerimiento 1
     """
-    # TODO: Modificar el requerimiento 1
-    pass
+    grafo = catalog["grafo_1"]
+    nodos = catalog["nodos"]
+    No_en = True
+    i = 0
+    id_node = ""
+    while No_en and i<1:
+        nodo = lt.get_element(nodos,i)
+        if nodo["lat"] == p_o[0] and nodo["lon"] == p_o[1] and id in nodo["grullas"]["elements"]:
+            No_en = False
+            id_node = nodo["id"]
+        i += 1
+    
+    vertice = gp.get_vertex_information(grafo,id_node)
+    a = dfs.dfs(grafo,id_node)
+    return a
 
 
 def req_2(catalog):
