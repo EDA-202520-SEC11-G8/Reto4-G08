@@ -47,7 +47,7 @@ def load_data(catalog, filename):
         for evento in lector:
             lt.add_last(catalog["eventos"], evento)
             
-        
+    catalog["eventos"] = lt.merge_sort(catalog["eventos"], cmp_timestamp)
     # crear nodos migratorios
     nodos, map_evento_nodo = crear_nodos(catalog["eventos"])
     
@@ -93,7 +93,7 @@ def crear_nodo(evento):
         "id": evento["event-id"],
         "lat": float(evento["location-lat"]),
         "lon": float(evento["location-long"]),
-        "timestamp": evento["timestamp"].split(".")[0],
+        "timestamp": datetime.fromisoformat(evento["timestamp"]).replace(microsecond=0),
         "grullas": lt.new_list(),
         "eventos": lt.new_list(),
         "prom_agua": 0.0,
@@ -151,8 +151,8 @@ def evento_encaja(nodo, evento):
     if dist > 3:
         return False
 
-    t1 = datetime.fromisoformat(nodo["timestamp"])
-    t2 = datetime.fromisoformat(evento["timestamp"])
+    t1 = nodo["timestamp"]
+    t2 = datetime.fromisoformat(evento["timestamp"]).replace(microsecond=0)
     horas = abs((t2 - t1).total_seconds()) / 3600
 
     return horas <= 3
@@ -203,53 +203,146 @@ def crear_nodos(lista_eventos):
 
 def construir_grafos(catalog):
     """
-    Construye los dos grafos del reto usando los nodos migratorios.
-
-    grafo_1:
-        Arcos dirigidos entre nodos consecutivos.
-        Peso del arco : distancia Haversine entre nodos.
-
-    grafo_2:
-        Arcos dirigidos entre nodos consecutivos.
-        Peso del arco : diferencia absoluta en el promedio
-        de distancia al agua entre nodos.
-
-    Cada nodo se inserta como vértice en ambos grafos.
-
-    Args:
-        catalog (dict): catálogo con nodos y grafos creados.
+    Construye los dos grafos según el enunciado del Reto 4.
+    Implementación SIMPLE y 100% compatible con array_list y map_linear_probing.
     """
+
     nodos = catalog["nodos"]
+    eventos = catalog["eventos"]
+    mapa_evento_nodo = catalog["map_evento_nodo"]
+
     g1 = catalog["grafo_1"]
     g2 = catalog["grafo_2"]
 
+    # Insertar todos los nodos como vértices
     for i in range(lt.size(nodos)):
-
         nodo = lt.get_element(nodos, i)
-        id_u = nodo["id"]
+        gp.insert_vertex(g1, nodo["id"], nodo)
+        gp.insert_vertex(g2, nodo["id"], nodo)
 
-        gp.insert_vertex(g1, id_u, nodo)
-        gp.insert_vertex(g2, id_u, nodo)
+    # Agrupar eventos por grulla
+    grupos = mp.new_map(100, 0.5)
 
+    for i in range(lt.size(eventos)):
+        ev = lt.get_element(eventos, i)
+        crane = ev["tag-local-identifier"]
+
+        lista = mp.get(grupos, crane)
+        if lista is None:
+            nueva = lt.new_list()
+            lt.add_last(nueva, ev)
+            mp.put(grupos, crane, nueva)
+        else:
+            lt.add_last(lista, ev)
+
+    # Estructuras para almacenar distancias de viajes A->B
+    distancias = mp.new_map(1000, 0.5)
+    aguas = mp.new_map(1000, 0.5)
+
+    # Procesar cada grulla
+    claves = mp.key_set(grupos)
+
+    for i in range(lt.size(claves)):
+
+        crane_id = lt.get_element(claves, i)
+        lista = mp.get(grupos, crane_id)
+
+        # ordenar eventos por timestamp
+        lista_ordenada = lt.merge_sort(lista, cmp_timestamp)
+
+        nodo_prev = None
+
+        for j in range(lt.size(lista_ordenada)):
+            evento = lt.get_element(lista_ordenada, j)
+            nodo_actual = mp.get(mapa_evento_nodo, evento["event-id"])
+
+            # primer evento
+            if nodo_prev is None:
+                nodo_prev = nodo_actual
+                continue
+
+            if nodo_prev != nodo_actual:
+
+                clave = f"{nodo_prev}->{nodo_actual}"
+
+                Nprev = buscar_nodo_por_id(nodos, nodo_prev)
+                Nact = buscar_nodo_por_id(nodos, nodo_actual)
+
+                # distancia haversine
+                d = haversine(Nprev["lat"], Nprev["lon"],
+                              Nact["lat"], Nact["lon"])
+
+                # registrar distancia migratoria
+                lista_d = mp.get(distancias, clave)
+                if lista_d is None:
+                    nueva = lt.new_list()
+                    lt.add_last(nueva, d)
+                    mp.put(distancias, clave, nueva)
+                else:
+                    lt.add_last(lista_d, d)
+
+                # registrar distancia promedio al agua
+                lista_a = mp.get(aguas, clave)
+                if lista_a is None:
+                    nueva = lt.new_list()
+                    lt.add_last(nueva, Nact["prom_agua"])
+                    mp.put(aguas, clave, nueva)
+                else:
+                    lt.add_last(lista_a, Nact["prom_agua"])
+
+            nodo_prev = nodo_actual
+
+    # Crear arcos con promedio
+    claves_arcos = mp.key_set(distancias)
+
+    for i in range(lt.size(claves_arcos)):
+
+        clave = lt.get_element(claves_arcos, i)
+        origen, destino = clave.split("->")
+
+        lista_d = mp.get(distancias, clave)
+        lista_a = mp.get(aguas, clave)
+
+        # promedio distancia
+        total_d = 0
+        for k in range(lt.size(lista_d)):
+            total_d += lt.get_element(lista_d, k)
+        w_dist = total_d / lt.size(lista_d)
+
+        # promedio agua
+        total_a = 0
+        for k in range(lt.size(lista_a)):
+            total_a += lt.get_element(lista_a, k)
+        w_agua = total_a / lt.size(lista_a)
+
+        gp.add_edge(g1, origen, destino, w_dist)
+        gp.add_edge(g2, origen, destino, w_agua)
+
+
+
+
+def cmp_timestamp(e1, e2):
+    """
+    Compara dos eventos por su timestamp.
+    Retorna True si e1 ocurre antes que e2.
+    """
+    t1 = datetime.fromisoformat(e1["timestamp"])
+    t2 = datetime.fromisoformat(e2["timestamp"])
+    return t1 <= t2
+
+def buscar_nodo_por_id(nodos, nodo_id):
+    """
+    Retorna el nodo cuyo id coincide con nodo_id.
+    Busca linealmente en array_list nodos.
+    """
     for i in range(lt.size(nodos)):
-        nodo_u = lt.get_element(nodos, i)
-        if i + 1 < lt.size(nodos):
-            nodo_v = lt.get_element(nodos, i+1)
+        nodo = lt.get_element(nodos, i)
+        if nodo["id"] == nodo_id:
+            return nodo
+    return None
 
-            id_u = nodo_u["id"]
-            id_v = nodo_v["id"]
 
-            dist = haversine(
-                nodo_u["lat"], nodo_u["lon"],
-                nodo_v["lat"], nodo_v["lon"]
-            )
 
-            agua = abs(nodo_u["prom_agua"] - nodo_v["prom_agua"])
-
-            gp.add_edge(g1, id_u, id_v, dist)
-            gp.add_edge(g2, id_u, id_v, agua)
-            
-            
             
 # Funciones de consulta sobre el catálogo
 
