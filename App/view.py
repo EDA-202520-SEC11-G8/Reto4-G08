@@ -105,13 +105,13 @@ def load_data(control):
     print(f"- Total de arcos    : {gp.size(grafo2)}")
 
     print("\n--- Primeros 5 nodos ---")
-    print(tb(nodos_to_table(nodos, primeros=True), headers="keys", tablefmt="grid"))
+    print(tb(nodos_to_table(nodos, primeros=True, incluir_distancia=True), headers="keys", tablefmt="grid"))
 
     print("\n--- Últimos 5 nodos ---")
-    print(tb(nodos_to_table(nodos, primeros=False), headers="keys", tablefmt="grid"))
+    print(tb(nodos_to_table(nodos, primeros=False, incluir_distancia=True), headers="keys", tablefmt="grid"))
 
 
-def nodos_to_table(nodos, primeros=True):
+def nodos_to_table(nodos, primeros=True, incluir_distancia=False):
     """
     Convierte los primeros o últimos 5 nodos en una tabla imprimible.
     """
@@ -137,6 +137,9 @@ def nodos_to_table(nodos, primeros=True):
             "Grullas (tags)": grullas,
             "Conteo de eventos": lt.size(nodo["eventos"])
         }
+        if incluir_distancia:
+            fila["Dist. Hídri prom (km)"] = round(nodo["prom_agua"],4)
+            
         tabla.append(fila)
 
     return tabla
