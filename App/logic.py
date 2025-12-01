@@ -203,10 +203,17 @@ def crear_nodos(lista_eventos):
 
 def construir_grafos(catalog):
     """
-    Construye los dos grafos según el enunciado del Reto 4.
-    Implementación SIMPLE y 100% compatible con array_list y map_linear_probing.
-    """
+    Construye los dos grafos del reto usando los nodos migratorios.
 
+    grafo_1:
+        Peso del arco : distancia Haversine entre nodos.
+
+    grafo_2:
+        Peso del arco : diferencia absoluta en el promedio
+        de distancia al agua entre nodos.
+    Args:
+        catalog (dict): catálogo con nodos y grafos creados.
+    """
     nodos = catalog["nodos"]
     eventos = catalog["eventos"]
     mapa_evento_nodo = catalog["map_evento_nodo"]
