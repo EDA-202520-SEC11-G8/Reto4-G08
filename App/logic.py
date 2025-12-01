@@ -1,24 +1,257 @@
 import time
+import csv
+from math import radians, sin, cos, sqrt, atan2
+from datetime import datetime
 
+
+from DataStructures.List import array_list as lt
+from DataStructures.Map import map_linear_probing as mp
+from DataStructures.Graph import digraph as gp
+
+
+# =============================================================================
+# ----------------------------- ESTRUCTURA PRINCIPAL --------------------------
+# =============================================================================
 def new_logic():
     """
-    Crea el catalogo para almacenar las estructuras de datos
+    Crea el catálogo principal.
+
+    El catálogo contiene:
+      - Una lista con todos los eventos cargados desde el archivo.
+      - Una lista de nodos migratorios construidos a partir de los eventos.
+      - Un mapa que relaciona cada event-id con el nodo al que pertenece.
+      - Dos grafos :
+            grafo_1: pesos por distancia entre nodos consecutivos.
+            grafo_2: pesos por diferencia promedio de agua entre nodos.
     """
-    #TODO: Llama a las funciónes de creación de las estructuras de datos
-    pass
+    catalog = {
+        "eventos": lt.new_list(),
+        "nodos": lt.new_list(),     
+        "map_evento_nodo": mp.new_map(50000, 0.5),
+        "grafo_1": gp.new_graph(10000),
+        "grafo_2": gp.new_graph(10000) 
+    }
+    return catalog
 
-
-# Funciones para la carga de datos
-
+# =============================================================================
+# ------------------------------ CARGA DE DATOS -------------------------------
+# =============================================================================
 def load_data(catalog, filename):
     """
     Carga los datos del reto
     """
-    # TODO: Realizar la carga de datos
-    pass
+    ruta = "Data/" + filename
+    with open(ruta, encoding="utf-8-sig") as f:
+        lector = csv.DictReader(f)
+        
+        for evento in lector:
+            lt.add_last(catalog["eventos"], evento)
+            
+        
+    # crear nodos migratorios
+    nodos, map_evento_nodo = crear_nodos(catalog["eventos"])
+    
+    catalog["nodos"] = nodos
+    catalog["map_evento_nodo"] = map_evento_nodo
+    
+    # crear grafos
+    construir_grafos(catalog)
 
+    return {
+        "num_eventos": lt.size(catalog["eventos"]),
+        "num_nodos": lt.size(catalog["nodos"])
+    }
+    
+# =============================================================================
+# ---------------------------- FUNCIONES AUXILIARES ---------------------------
+# =============================================================================
+
+def haversine(lat1, lon1, lat2, lon2):
+    """    
+    Calcula la distancia entre dos puntos usando la fórmula Haversine.
+    """
+    R = 6371
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat/2)**2 + cos(radians(lat1))*cos(radians(lat2))*sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    return R * c
+
+
+def crear_nodo(evento):
+    """
+    Crea un nuevo nodo migratorio basado en un evento individual.
+
+    Un nodo agrupa varios eventos cercanos en espacio (<3 km)
+    y tiempo (<3 horas). 
+    Además, calcula:
+      - Lista de grullas presentes en el nodo.
+      - Lista de eventos asociados.
+      - Promedio de distancia al agua (comments).
+    """
+    nodo = {
+        "id": evento["event-id"],
+        "lat": float(evento["location-lat"]),
+        "lon": float(evento["location-long"]),
+        "timestamp": evento["timestamp"].split(".")[0],
+        "grullas": lt.new_list(),
+        "eventos": lt.new_list(),
+        "prom_agua": 0.0,
+        "total_agua": 0.0,
+        "count": 0
+    }
+
+    lt.add_last(nodo["grullas"], evento["tag-local-identifier"])
+    lt.add_last(nodo["eventos"], evento)
+
+    d = float(evento["comments"]) / 1000
+    nodo["total_agua"] = d
+    nodo["count"] = 1
+    nodo["prom_agua"] = d
+
+    return nodo
+
+
+def agregar_evento_a_nodo(nodo, evento):
+    """
+    Agrega un evento adicional a un nodo migratorio existente.
+
+    El nodo se actualiza así:
+      - Se añade la grulla si no estaba registrada.
+      - Se agrega el evento a la lista interna del nodo.
+      - Se recalcula el promedio de distancia al agua.
+    """
+    
+    if lt.is_present(nodo["grullas"], evento["tag-local-identifier"]) == -1:
+        lt.add_last(nodo["grullas"], evento["tag-local-identifier"])
+
+    lt.add_last(nodo["eventos"], evento)
+
+    d = float(evento["comments"]) / 1000
+    nodo["total_agua"] += d
+    nodo["count"] += 1
+    nodo["prom_agua"] = nodo["total_agua"] / nodo["count"]
+    
+    
+def evento_encaja(nodo, evento):
+    """
+    Verifica si un evento pertenece a un nodo migratorio.
+
+    Un evento pertenece a un nodo si:
+      - Está a menos de 3 km del nodo.
+      - La diferencia temporal es menor o igual a 3 horas.
+
+    Returns:
+        bool: True si encaja, False en caso contrario.
+    """
+    dist = haversine(
+        nodo["lat"], nodo["lon"],
+        float(evento["location-lat"]), float(evento["location-long"])
+    )
+    if dist > 3:
+        return False
+
+    t1 = datetime.fromisoformat(nodo["timestamp"])
+    t2 = datetime.fromisoformat(evento["timestamp"])
+    horas = abs((t2 - t1).total_seconds()) / 3600
+
+    return horas <= 3
+
+def crear_nodos(lista_eventos):
+    """
+    Construye la lista completa de nodos migratorios.
+
+    Para cada evento:
+      - Se revisa si encaja en un nodo ya existente.
+      - Si encaja, se agrega al nodo correspondiente.
+      - Si no encaja, se crea un nodo nuevo.
+      - Se registra la relación event-id → nodo-id en un mapa.
+
+    Args:
+        lista_eventos (array_list): lista de eventos cargados del CSV.
+
+    Returns:
+        tuple: 
+            array_list con los nodos construidos,
+            mapa (event-id → nodo-id).
+    """
+    nodos = lt.new_list()
+    mapa = mp.new_map(50000, 0.5)
+
+    n = lt.size(lista_eventos)
+
+    for i in range(n):
+        evento = lt.get_element(lista_eventos, i)
+        asignado = False
+
+        for j in range(lt.size(nodos)):
+            nodo = lt.get_element(nodos, j)
+
+            if evento_encaja(nodo, evento):
+                agregar_evento_a_nodo(nodo, evento)
+                mp.put(mapa, evento["event-id"], nodo["id"])
+                asignado = True
+                break
+
+        if not asignado:
+            nuevo = crear_nodo(evento)
+            lt.add_last(nodos, nuevo)
+            mp.put(mapa, evento["event-id"], nuevo["id"])
+
+    return nodos, mapa
+
+
+def construir_grafos(catalog):
+    """
+    Construye los dos grafos del reto usando los nodos migratorios.
+
+    grafo_1:
+        Arcos dirigidos entre nodos consecutivos.
+        Peso del arco : distancia Haversine entre nodos.
+
+    grafo_2:
+        Arcos dirigidos entre nodos consecutivos.
+        Peso del arco : diferencia absoluta en el promedio
+        de distancia al agua entre nodos.
+
+    Cada nodo se inserta como vértice en ambos grafos.
+
+    Args:
+        catalog (dict): catálogo con nodos y grafos creados.
+    """
+    nodos = catalog["nodos"]
+    g1 = catalog["grafo_1"]
+    g2 = catalog["grafo_2"]
+
+    for i in range(lt.size(nodos)):
+
+        nodo = lt.get_element(nodos, i)
+        id_u = nodo["id"]
+
+        gp.insert_vertex(g1, id_u, nodo)
+        gp.insert_vertex(g2, id_u, nodo)
+
+    for i in range(lt.size(nodos)):
+        nodo_u = lt.get_element(nodos, i)
+        if i + 1 < lt.size(nodos):
+            nodo_v = lt.get_element(nodos, i+1)
+
+            id_u = nodo_u["id"]
+            id_v = nodo_v["id"]
+
+            dist = haversine(
+                nodo_u["lat"], nodo_u["lon"],
+                nodo_v["lat"], nodo_v["lon"]
+            )
+
+            agua = abs(nodo_u["prom_agua"] - nodo_v["prom_agua"])
+
+            gp.add_edge(g1, id_u, id_v, dist)
+            gp.add_edge(g2, id_u, id_v, agua)
+            
+            
+            
 # Funciones de consulta sobre el catálogo
-
 
 def req_1(catalog):
     """

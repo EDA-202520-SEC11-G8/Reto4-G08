@@ -1,12 +1,17 @@
 import sys
+import time
+from tabulate import tabulate as tb
+import App.logic as l
 
+from DataStructures.List import array_list as lt
+from DataStructures.Graph import digraph as gp
 
 def new_logic():
     """
         Se crea una instancia del controlador
     """
-    #TODO: Llamar la función de la lógica donde se crean las estructuras de datos
-    pass
+    control = l.new_logic()
+    return control
 
 def print_menu():
     print("Bienvenido")
@@ -23,8 +28,136 @@ def load_data(control):
     """
     Carga los datos
     """
-    #TODO: Realizar la carga de datos
-    pass
+    print("\nSeleccione el archivo que desea cargar:")
+    print("1- 1000_cranes_mongolia_30pct.csv")
+    print("2- 1000_cranes_mongolia_80pct.csv")
+    print("3- 1000_cranes_mongolia_small.csv")
+    print("4- 1000_cranes_mongolia_large.csv")
+
+    opcion = input("\nIngrese una opción (1-4): ")
+    
+    if opcion == "1":
+        filename = "1000_cranes_mongolia_30pct.csv"
+    elif opcion == "2":
+        filename = "1000_cranes_mongolia_80pct.csv"
+    elif opcion == "3":
+        filename = "1000_cranes_mongolia_small.csv"
+    elif opcion == "4":
+        filename = "1000_cranes_mongolia_large.csv"
+    else:
+        print("Opción inválida. Intente de nuevo.")
+        return
+    
+    print(f"\nCargando información desde Data/{filename}...\n")
+    
+    start = l.get_time()
+    res = l.load_data(control, filename)
+    end = l.get_time()
+    tiempo = round(l.delta_time(start, end), 2)
+    
+    
+    nodos = control["nodos"]
+    grafo1 = control["grafo_1"]
+    grafo2 = control["grafo_2"]
+    
+    
+    # ===========================================================
+    #          IMPRESIÓN DEL RESUMEN DE CARGA
+    # ===========================================================
+    print("\n======================================================")
+    print("                  CARGA DE DATOS")
+    print("======================================================")
+    
+    total_eventos = res["num_eventos"]
+    total_nodos = res["num_nodos"]
+
+    contador_grulla = contar_grullas(nodos)
+    
+    print(f"- Total de grullas reconocidas        : {contador_grulla}")
+    print(f"- Total de eventos cargados           : {total_eventos}")
+    print(f"- Total de nodos construidos          : {total_nodos}")
+    print(f"- Tiempo de carga (segundos)          : {tiempo}")
+
+    # ===========================================================
+    #   GRAFO 1 (Distancias migratorias)
+    # ===========================================================
+    print("\n======================================================")
+    print("              GRAFO 1 – DISTANCIAS MIGRATORIAS")
+    print("======================================================")
+    print(f"- Total de vértices : {gp.order(grafo1)}")
+    print(f"- Total de arcos    : {gp.size(grafo1)}")
+    
+    print("\n--- Primeros 5 nodos ---")
+    print(tb(nodos_to_table(nodos, primeros=True), headers="keys", tablefmt="grid"))
+
+    print("\n--- Últimos 5 nodos ---")
+    print(tb(nodos_to_table(nodos, primeros=False), headers="keys", tablefmt="grid"))
+    
+
+    # ===========================================================
+    #   GRAFO 2 (Diferencia de agua)
+    # ===========================================================
+
+    print("\n======================================================")
+    print("        GRAFO 2 – PROXIMIDAD A FUENTES HÍDRICAS")
+    print("======================================================")
+    print(f"- Total de vértices : {gp.order(grafo2)}")
+    print(f"- Total de arcos    : {gp.size(grafo2)}")
+
+    print("\n--- Primeros 5 nodos ---")
+    print(tb(nodos_to_table(nodos, primeros=True), headers="keys", tablefmt="grid"))
+
+    print("\n--- Últimos 5 nodos ---")
+    print(tb(nodos_to_table(nodos, primeros=False), headers="keys", tablefmt="grid"))
+
+
+def nodos_to_table(nodos, primeros=True):
+    """
+    Convierte los primeros o últimos 5 nodos en una tabla imprimible.
+    """
+    total = lt.size(nodos)
+    tabla = []
+
+    if primeros:
+        r_inicio, r_fin = 0, min(5, total)
+    else:
+        r_inicio, r_fin = max(0, total - 5), total
+
+    for i in range(r_inicio, r_fin):
+        nodo = lt.get_element(nodos, i)
+
+        grullas = []
+        for j in range(lt.size(nodo["grullas"])):
+            grullas.append(lt.get_element(nodo["grullas"], j))
+
+        fila = {
+            "Identificador único": nodo["id"],
+            "Posición (lat,long)": f"({nodo['lat']:.4f}, {nodo['lon']:.4f})",
+            "Fecha de creación": nodo["timestamp"],
+            "Grullas (tags)": grullas,
+            "Conteo de eventos": lt.size(nodo["eventos"])
+        }
+        tabla.append(fila)
+
+    return tabla
+
+def contar_grullas(nodos):
+    """
+    Cuenta grullas únicas.
+    """
+    grullas = {} # Dico para guardar unicos
+
+    n = lt.size(nodos)
+    for i in range(n):
+        nodo = lt.get_element(nodos, i)
+        lista_grullas = nodo["grullas"]
+
+        for j in range(lt.size(lista_grullas)):
+            g = lt.get_element(lista_grullas, j)
+            grullas[g] = True
+
+    return len(grullas)
+
 
 
 def print_data(control, id):
