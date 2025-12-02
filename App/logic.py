@@ -258,7 +258,8 @@ def construir_grafos(catalog):
         lista_ordenada = lt.merge_sort(lista, cmp_timestamp)
 
         nodo_prev = None
-
+        evento_prev = None
+        
         for j in range(lt.size(lista_ordenada)):
             evento = lt.get_element(lista_ordenada, j)
             nodo_actual = mp.get(mapa_evento_nodo, evento["event-id"])
@@ -266,18 +267,20 @@ def construir_grafos(catalog):
             # primer evento
             if nodo_prev is None:
                 nodo_prev = nodo_actual
+                evento_prev = evento
                 continue
 
             if nodo_prev != nodo_actual:
 
                 clave = f"{nodo_prev}->{nodo_actual}"
-
-                Nprev = buscar_nodo_por_id(nodos, nodo_prev)
                 Nact = buscar_nodo_por_id(nodos, nodo_actual)
-
-                # distancia haversine
-                d = haversine(Nprev["lat"], Nprev["lon"],
-                              Nact["lat"], Nact["lon"])
+                
+                # distancia haversine entre los eventos
+                lat,lon = float(evento["location-lat"]), float(evento["location-long"])
+                lat_prev,lon_prev = float(evento_prev["location-lat"]), float(evento_prev["location-long"])
+                
+                d = haversine(lat, lon,
+                              lat_prev, lon_prev)
 
                 # registrar distancia migratoria
                 lista_d = mp.get(distancias, clave)
@@ -298,6 +301,7 @@ def construir_grafos(catalog):
                     lt.add_last(lista_a, Nact["prom_agua"])
 
             nodo_prev = nodo_actual
+            evento_prev = evento
 
     # Crear arcos con promedio
     claves_arcos = mp.key_set(distancias)
