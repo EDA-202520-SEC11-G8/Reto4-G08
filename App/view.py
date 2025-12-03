@@ -190,8 +190,62 @@ def print_req_3(control):
     """
         Función que imprime la solución del Requerimiento 3 en consola
     """
-    # TODO: Imprimir el resultado del requerimiento 3
-    pass
+    inicio = time.time()
+    res = l.req_3(control)
+    
+    fin = inicio = time.time()
+    
+    print("\n===== Resultados del Requerimiento 3 =====")
+    print(f"Tiempo de ejecución: {fin - inicio} ms\n")
+    if "message" in res:
+        print(res["message"])
+        print("")
+        return
+    print(f"- Total de puntos en la ruta : {res['total_puntos']}")
+    print(f"- Total de individuos que usan la ruta : {res['total_individuos']}")
+    
+    filas = []
+    N = 5
+    primeros = res["primeros_5"]
+    ultimos = res["ultimos_5"]
+    
+    for p in primeros:
+        filas.append({
+            "ID": p["id"],
+            "Lat": p["lat"],
+            "Lon": p["lon"],
+            "#Grullas": p["num_grullas"],
+            "3 primeras": p["first3"],
+            "3 últimas": p["last3"],
+            "Dist prev": p["dist_prev"],
+            "Dist next": p["dist_next"]
+        })
+        
+    if res["total_puntos"] > 2 * N:
+        filas.append({
+            "ID": "...", "Lat": "...", "Lon": "...",
+            "#Grullas": "...",
+            "3 primeras": "...",
+            "3 últimas": "...",
+            "Dist prev": "...",
+            "Dist next": "..."
+        })
+
+    # últimos 5
+    for p in ultimos:
+        filas.append({
+            "ID": p["id"],
+            "Lat": p["lat"],
+            "Lon": p["lon"],
+            "#Grullas": p["num_grullas"],
+            "3 primeras": p["first3"],
+            "3 últimas": p["last3"],
+            "Dist prev": p["dist_prev"],
+            "Dist next": p["dist_next"]
+        })
+
+    print(tb(filas, headers="keys", tablefmt="presto"))
+    print("")
 
 
 def print_req_4(control):
