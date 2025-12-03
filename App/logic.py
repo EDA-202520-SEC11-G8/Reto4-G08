@@ -2,12 +2,13 @@ import time
 import csv
 from math import radians, sin, cos, sqrt, atan2
 from datetime import datetime
-
+import sys
+sys.setrecursionlimit(20000)
 
 from DataStructures.List import array_list as lt
 from DataStructures.Map import map_linear_probing as mp
 from DataStructures.Graph import digraph as gp
-
+from DataStructures.Graph import dfs as DFS
 
 # =============================================================================
 # ----------------------------- ESTRUCTURA PRINCIPAL --------------------------
@@ -464,6 +465,119 @@ def longest_path_in_dag(graph):
 
     return path
 
+def cmp_subred(a, b):
+    sa = a["total_nodos"]
+    sb = b["total_nodos"]
+
+    # Orden descendente por cantidad de nodos
+    if sa > sb:
+        return True
+    elif sa < sb:
+        return False
+    
+    # Si empatan, ordenar por id_subred ascendente
+    return a["id_subred"] < b["id_subred"]
+
+def obtener_nodos_dfs(grafo, origen):
+    """
+    Usa DFS para encontrar todos los nodos conectados desde un origen.
+    Retorna una lista con los IDs de los nodos.
+    """
+    # DFS dado por la estructura
+    resultado_dfs = DFS.dfs(grafo, origen)
+    mapa_visitados = resultado_dfs["marked"]
+    
+    # Extraemos las llaves (IDs de nodos) del mapa
+    lista_ids = mp.key_set(mapa_visitados)
+    return lista_ids
+def calcular_estadisticas_subred(id_subred, lista_ids, catalogo_nodos):
+    """
+    Procesa una lista de IDs de nodos para calcular:
+    - Rangos de Lat/Lon
+    - Grullas únicas
+    - Estructura de datos para el reporte
+    """
+    total_nodos_ids = lt.size(lista_ids)
+    
+    min_lat, max_lat = 1000.0, -1000.0
+    min_lon, max_lon = 1000.0, -1000.0
+    
+    mapa_grullas = mp.new_map(5000, 0.5)
+    detalles_nodos = lt.new_list() 
+    
+    # Recorremos todos los nodos de la subred
+    for i in range(total_nodos_ids):
+        nid = lt.get_element(lista_ids, i)
+        nodo = buscar_nodo_por_id(catalogo_nodos, nid)
+        
+        if nodo is not None:
+            # Actualizar coordenadas extremas
+            lat, lon = nodo["lat"], nodo["lon"]
+            if lat < min_lat: min_lat = lat
+            if lat > max_lat: max_lat = lat
+            if lon < min_lon: min_lon = lon
+            if lon > max_lon: max_lon = lon
+            
+            # Recolectar grullas
+            tags = nodo["grullas"]
+            for k in range(lt.size(tags)):
+                t = lt.get_element(tags, k)
+                mp.put(mapa_grullas, t, True)
+            
+            # Guardar info para visualización
+            info_simple = {
+                "id": nid,
+                "lat": lat,
+                "lon": lon
+            }
+            lt.add_last(detalles_nodos, info_simple)
+
+    # Lista de grullas únicas
+    lista_grullas = mp.key_set(mapa_grullas)
+
+    real_size = lt.size(detalles_nodos)
+
+    primeros_3_nodos = lt.new_list()
+    ultimos_3_nodos = lt.new_list()
+    
+    # Primeros 3
+    limit_n = min(3, real_size)
+    for k in range(limit_n):
+        lt.add_last(primeros_3_nodos, lt.get_element(detalles_nodos, k))
+    
+    # Últimos 3
+    start_n = max(3, real_size - 3)
+    if start_n < limit_n: start_n = limit_n
+        
+    for k in range(start_n, real_size):
+        lt.add_last(ultimos_3_nodos, lt.get_element(detalles_nodos, k))
+
+    # Grullas
+    total_grullas = lt.size(lista_grullas)
+    primeras_3_grullas = lt.new_list()
+    ultimas_3_grullas = lt.new_list()
+    
+    limit_g = min(3, total_grullas)
+    for k in range(limit_g):
+        lt.add_last(primeras_3_grullas, lt.get_element(lista_grullas, k))
+        
+    start_g = max(3, total_grullas - 3)
+    if start_g < limit_g: start_g = limit_g
+    for k in range(start_g, total_grullas):
+        lt.add_last(ultimas_3_grullas, lt.get_element(lista_grullas, k))
+
+    return {
+        "id_subred": id_subred,
+        "total_nodos": total_nodos_ids, # Mantenemos el total teórico para el reporte
+        "total_individuos": total_grullas,
+        "rango_lat": (min_lat, max_lat),
+        "rango_lon": (min_lon, max_lon),
+        "primeros_nodos": primeros_3_nodos,
+        "ultimos_nodos": ultimos_3_nodos,
+        "primeras_grullas": primeras_3_grullas,
+        "ultimas_grullas": ultimas_3_grullas
+    }
+
 # Funciones de consulta sobre el catálogo
 
 def req_1(catalog):
@@ -617,10 +731,47 @@ def req_5(catalog):
 
 def req_6(catalog):
     """
-    Retorna el resultado del requerimiento 6
+    Identifica grupos hídricos aislados (subredes).
+    Retorna un diccionario con el total y la lista de subredes ordenada.
     """
-    # TODO: Modificar el requerimiento 6
-    pass
+    grafo = catalog["grafo_2"] # Grafo de proximidad hídrica
+    nodos_global = catalog["nodos"]
+    vertices = gp.vertices(grafo)
+    num_vertices = lt.size(vertices)
+    visitados_global = mp.new_map(num_vertices + 100, 0.5)
+    lista_subredes = lt.new_list()
+    contador_id = 1
+    
+    # iterar sobre todos los vértices del grafo
+    for i in range(num_vertices):
+        nodo_id = lt.get_element(vertices, i)
+        
+        # si ya pertenece a una subred, saltar
+        if mp.contains(visitados_global, nodo_id):
+            continue
+        
+        # encontramos una nueva subred: obtener todos los nodos conectados (DFS)
+        ids_componente = obtener_nodos_dfs(grafo, nodo_id)
+        
+        # marcar estos nodos como visitados globalmente
+        size_comp = lt.size(ids_componente)
+        for j in range(size_comp):
+            uid = lt.get_element(ids_componente, j)
+            mp.put(visitados_global, uid, True)
+            
+        # calcular estadísticas y guardar
+        stats = calcular_estadisticas_subred(contador_id, ids_componente, nodos_global)
+        lt.add_last(lista_subredes, stats)
+        
+        contador_id += 1
+        
+    # ordenar por tamaño (mayor a menor)
+    lista_ordenada = lt.merge_sort(lista_subredes, cmp_subred)
+    
+    return {
+        "total_subredes": lt.size(lista_ordenada),
+        "subredes": lista_ordenada
+    }
 
 
 # Funciones para medir tiempos de ejecucion
