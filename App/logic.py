@@ -578,6 +578,131 @@ def calcular_estadisticas_subred(id_subred, lista_ids, catalogo_nodos):
         "ultimas_grullas": ultimas_3_grullas
     }
 
+def buscar_nodo_mas_cercano(nodos, lat_user, lon_user):
+    """
+    Retorna el ID del nodo cuya ubicación (lat/lon)
+    es la más cercana al punto GPS dado por el usuario.
+
+    Args:
+        nodos (array_list): nodos migratorios.
+        lat_user, lon_user (float): coordenadas del usuario.
+
+    Returns:
+        str: id del nodo más cercano.
+    """
+    mejor_id = None
+    mejor_dist = 999999999
+
+    N = lt.size(nodos)
+
+    for i in range(N):
+        nodo = lt.get_element(nodos, i)
+        lat = nodo["lat"]
+        lon = nodo["lon"]
+
+        d = haversine(lat, lon, lat_user, lon_user)
+        if d < mejor_dist:
+            mejor_dist = d
+            mejor_id = nodo["id"]
+
+    return mejor_id
+
+def bfs_camino(grafo, origen, destino):
+    """
+    BFS estándar para obtener el camino desde origen hasta destino.
+
+    Args:
+        grafo: grafo dirigido.
+        origen: id del nodo inicial.
+        destino: id del nodo objetivo.
+
+    Returns:
+        lista (array_list) con los ids del camino en orden.
+        Si no existe camino, retorna None.
+    """
+    # cola FIFO
+    cola = lt.new_list()
+    # mapa de visitados
+    visitados = mp.new_map(20000, 0.5)
+    # mapa para guardar padre de cada nodo
+    padre = mp.new_map(20000, 0.5)
+
+    lt.add_last(cola, origen)
+    mp.put(visitados, origen, True)
+    mp.put(padre, origen, None)
+
+    pos = 0
+    while pos < lt.size(cola):
+        actual = lt.get_element(cola, pos)
+
+        if actual == destino:
+            break
+
+        adjs = gp.adjacents(grafo, actual)
+        size_adj = lt.size(adjs)
+
+        for i in range(size_adj):
+            nxt = lt.get_element(adjs, i)
+
+            if not mp.contains(visitados, nxt):
+                mp.put(visitados, nxt, True)
+                mp.put(padre, nxt, actual)
+                lt.add_last(cola, nxt)
+
+        pos += 1
+
+    # Si destino no fue visitado, no existe camino
+    if not mp.contains(visitados, destino):
+        return None
+
+    # Reconstruir camino desde destino → origen
+    rev = lt.new_list()
+    cur = destino
+
+    while cur is not None:
+        lt.add_last(rev, cur)
+        cur = mp.get(padre, cur)
+
+    # Invertir la lista
+    path = lt.new_list()
+    for i in range(lt.size(rev)-1, -1, -1):
+        lt.add_last(path, lt.get_element(rev, i))
+
+    return path
+
+def ultimo_nodo_en_radio(camino, nodos, nodo_origen, radio_km):
+    """
+    Dado un camino (lista de nodos) halla el último nodo
+    cuya distancia respecto del nodo de origen esté dentro del radio.
+
+    Args:
+        camino: lista con los ids del camino.
+        nodos: lista completa de nodos migratorios.
+        nodo_origen: id del nodo de origen.
+        radio_km: distancia de interés.
+
+    Returns:
+        id del último nodo en el área.
+        Si ninguno califica → devuelve el origen mismo.
+    """
+    origen_real = buscar_nodo_por_id(nodos, nodo_origen)
+    lat0, lon0 = origen_real["lat"], origen_real["lon"]
+
+    ultimo = nodo_origen
+
+    for i in range(lt.size(camino)):
+        nid = lt.get_element(camino, i)
+        nodo = buscar_nodo_por_id(nodos, nid)
+
+        if nodo is None:
+            continue
+
+        d = haversine(lat0, lon0, nodo["lat"], nodo["lon"])
+        if d <= radio_km:
+            ultimo = nid
+
+    return ultimo
+
 # Funciones de consulta sobre el catálogo
 
 def req_1(catalog):
@@ -588,12 +713,143 @@ def req_1(catalog):
     pass
 
 
-def req_2(catalog):
+def req_2(catalog, lat_o, lon_o, lat_d, lon_d, radio_km):
     """
-    Retorna el resultado del requerimiento 2
+    Detectar movimientos entre dos puntos migratorios alrededor de un área.
+
+    Parámetros:
+        lat_o, lon_o -> coordenadas del origen
+        lat_d, lon_d -> coordenadas del destino
+        radio_km -> radio de interés
+
+    Retorna:
+        Diccionario con toda la información solicitada.
     """
-    # TODO: Modificar el requerimiento 2
-    pass
+
+    nodos = catalog["nodos"]
+    grafo = catalog["grafo_1"]
+
+    # 1. Encontrar nodos migratorios más cercanos (Haversine)
+    origen = buscar_nodo_mas_cercano(nodos, lat_o, lon_o)
+    destino = buscar_nodo_mas_cercano(nodos, lat_d, lon_d)
+
+    # 2. BFS para encontrar ruta
+    camino = bfs_camino(grafo, origen, destino)
+
+    if camino is None:
+        return {
+            "mensaje": "No existe un camino viable entre los puntos.",
+            "origen": origen,
+            "destino": destino
+        }
+
+    total_puntos = lt.size(camino)
+
+    # 3. Último nodo dentro del radio
+    ultimo_radio = ultimo_nodo_en_radio(camino, nodos, origen, radio_km)
+
+    # 4. Distancia total del recorrido (Haversine)
+    total_distancia = 0
+    for i in range(total_puntos - 1):
+        a = lt.get_element(camino, i)
+        b = lt.get_element(camino, i + 1)
+
+        na = buscar_nodo_por_id(nodos, a)
+        nb = buscar_nodo_por_id(nodos, b)
+
+        if na is not None and nb is not None:
+            total_distancia += haversine(na["lat"], na["lon"], nb["lat"], nb["lon"])
+
+    # 5. Detalles de 5 primeros y 5 últimos
+    primeros = lt.new_list()
+    ultimos = lt.new_list()
+
+    limite = 5 if total_puntos >= 5 else total_puntos
+    inicio_u = total_puntos - limite
+
+    # primeros 5
+    for i in range(limite):
+        nid = lt.get_element(camino, i)
+        lt.add_last(primeros, nid)
+
+    # últimos 5
+    for i in range(inicio_u, total_puntos):
+        nid = lt.get_element(camino, i)
+        lt.add_last(ultimos, nid)
+
+    # 6. Información detallada: id, lat, lon, grullas, 3 primeras y 3 últimas, dist siguiente
+    detalles = lt.new_list()
+
+    for i in range(total_puntos):
+        nid = lt.get_element(camino, i)
+        nodo = buscar_nodo_por_id(nodos, nid)
+
+        if nodo is None:
+            info = {
+                "id": nid,
+                "lat": "Unknown",
+                "lon": "Unknown",
+                "num_grullas": "Unknown",
+                "first3": "Unknown",
+                "last3": "Unknown",
+                "dist_next": "Unknown"
+            }
+            lt.add_last(detalles, info)
+            continue
+
+        tags = nodo["grullas"]
+        gsize = lt.size(tags)
+
+        first3 = lt.new_list()
+        last3 = lt.new_list()
+
+        limite_g = 3 if gsize >= 3 else gsize
+
+        # primeras 3
+        for j in range(limite_g):
+            lt.add_last(first3, lt.get_element(tags, j))
+
+        # ultimas 3
+        inicio_g = gsize - 3 if gsize >= 3 else 0
+        for j in range(inicio_g, gsize):
+            lt.add_last(last3, lt.get_element(tags, j))
+
+        # distancia al siguiente nodo
+        if i < total_puntos - 1:
+            nxt = lt.get_element(camino, i + 1)
+            nodo2 = buscar_nodo_por_id(nodos, nxt)
+            if nodo2 is not None:
+                dist_sig = haversine(nodo["lat"], nodo["lon"], nodo2["lat"], nodo2["lon"])
+            else:
+                dist_sig = "Unknown"
+        else:
+            dist_sig = "Unknown"
+
+        info = {
+            "id": nodo["id"],
+            "lat": nodo["lat"],
+            "lon": nodo["lon"],
+            "num_grullas": gsize,
+            "first3": first3,
+            "last3": last3,
+            "dist_next": dist_sig
+        }
+
+        lt.add_last(detalles, info)
+
+    # -----------------------------
+    # EMPAQUETAR RESPUESTA
+    # -----------------------------
+    return {
+        "origen": origen,
+        "destino": destino,
+        "ultimo_en_radio": ultimo_radio,
+        "distancia_total": total_distancia,
+        "total_puntos": total_puntos,
+        "primeros_5_ids": primeros,
+        "ultimos_5_ids": ultimos,
+        "detalles": detalles
+    }
 
 
 def req_3(catalog):
