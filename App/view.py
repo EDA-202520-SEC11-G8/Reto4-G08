@@ -110,6 +110,15 @@ def load_data(control):
     print("\n--- Últimos 5 nodos ---")
     print(tb(nodos_to_table(nodos, primeros=False, incluir_distancia=True), headers="keys", tablefmt="grid"))
 
+def buscar_detalle(detalles, nid):
+    """
+    Busca en la lista 'detalles' la info del nodo con id = nid.
+    """
+    for i in range(lt.size(detalles)):
+        d = lt.get_element(detalles, i)
+        if d["id"] == nid:
+            return d
+    return None
 
 def nodos_to_table(nodos, primeros=True, incluir_distancia=False):
     """
@@ -182,8 +191,93 @@ def print_req_2(control):
     """
         Función que imprime la solución del Requerimiento 2 en consola
     """
-    # TODO: Imprimir el resultado del requerimiento 2
-    pass
+    print("\n===== Resultados del Requerimiento 2 =====")
+
+    # Pedir parámetros al usuario
+    lat_o = float(input("Ingrese la latitud del punto de origen: "))
+    lon_o = float(input("Ingrese la longitud del punto de origen: "))
+    lat_d = float(input("Ingrese la latitud del punto de destino: "))
+    lon_d = float(input("Ingrese la longitud de destino: "))
+    radio = float(input("Ingrese el radio de interés (km): "))
+
+    # Ejecutar requerimiento
+    inicio = time.time()
+    res = l.req_2(control, lat_o, lon_o, lat_d, lon_d, radio)
+    fin = time.time()
+
+    print(f"\nTiempo de ejecución: {round((fin - inicio) * 1000, 2)} ms\n")
+
+    # Si no hay camino
+    if "mensaje" in res:
+        print(res["mensaje"])
+        print(f"- Nodo origen más cercano : {res['origen']}")
+        print(f"- Nodo destino más cercano: {res['destino']}")
+        print("")
+        return
+
+    # -------------------------
+    # Resumen general del REQ 2
+    # -------------------------
+    print(f"- Nodo migratorio origen : {res['origen']}")
+    print(f"- Nodo migratorio destino: {res['destino']}")
+    print(f"- Último nodo dentro del área (radio={radio} km): {res['ultimo_en_radio']}")
+    print(f"- Distancia total del camino (km): {round(res['distancia_total'], 4)}")
+    print(f"- Total de puntos del camino: {res['total_puntos']}\n")
+
+    # -------------------------
+    #  Tablas: primeros 5 / últimos 5
+    # -------------------------
+    print("Primeros 5 nodos del recorrido:\n")
+
+    filas = []
+    primeros = res["primeros_5_ids"]
+
+    for i in range(lt.size(primeros)):
+        nid = lt.get_element(primeros, i)
+
+        # Buscar info detallada correspondiente
+        det = buscar_detalle(res["detalles"], nid)
+
+        filas.append({
+            "ID": det["id"],
+            "Lat": det["lat"],
+            "Lon": det["lon"],
+            "#Grullas": det["num_grullas"],
+            "3 primeras": det["first3"],
+            "3 últimas": det["last3"],
+            "Dist next": det["dist_next"]
+        })
+
+    print(tb(filas, headers="keys", tablefmt="presto"))
+    print("")
+
+    # Si hay puntos intermedios largos
+    if res["total_puntos"] > 10:
+        print("...")
+        print("")
+
+    print("Últimos 5 nodos del recorrido:\n")
+
+    filas2 = []
+    ultimos = res["ultimos_5_ids"]
+
+    for i in range(lt.size(ultimos)):
+        nid = lt.get_element(ultimos, i)
+
+        det = buscar_detalle(res["detalles"], nid)
+
+        filas2.append({
+            "ID": det["id"],
+            "Lat": det["lat"],
+            "Lon": det["lon"],
+            "#Grullas": det["num_grullas"],
+            "3 primeras": det["first3"],
+            "3 últimas": det["last3"],
+            "Dist next": det["dist_next"]
+        })
+
+    print(tb(filas2, headers="keys", tablefmt="presto"))
+    print("")
 
 
 def print_req_3(control):
