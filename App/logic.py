@@ -11,6 +11,7 @@ from DataStructures.Graph import digraph as gp
 from DataStructures.Graph import dfs as DFS
 from DataStructures.Graph import vertex as vtx
 from DataStructures.Stack import stack as st
+from DataStructures.Graph import dijsktra as dk
 
 # =============================================================================
 # ----------------------------- ESTRUCTURA PRINCIPAL --------------------------
@@ -704,6 +705,28 @@ def ultimo_nodo_en_radio(camino, nodos, nodo_origen, radio_km):
             ultimo = nid
 
     return ultimo
+
+
+def nodos_en_radio(nodos, nodo_origen, radio_km):
+    """
+    Devuelve lista de nodos cuyo centro está dentro del radio indicado.
+     en array_list del curso.
+    """
+
+    lista = lt.new_list()
+    origen = buscar_nodo_por_id(nodos, nodo_origen)
+
+    lat0 = origen["lat"]
+    lon0 = origen["lon"]
+
+    for i in range(lt.size(nodos)):
+        nodo = lt.get_element(nodos, i)
+        d = haversine(lat0, lon0, nodo["lat"], nodo["lon"])
+
+        if d <= radio_km:
+            lt.add_last(lista, nodo["id"])
+
+    return lista
 
 def ejecutar_prim(grafo, origen):
     """
@@ -1422,12 +1445,66 @@ def req_4(catalog, lat_o, lon_o):
     }
     return resultado
 
-def req_5(catalog):
-    """
-    Retorna el resultado del requerimiento 5
-    """
-    # TODO: Modificar el requerimiento 5
-    pass
+def req5(catalog, lat_user, lon_user, radio_km):
+
+    nodos = catalog["nodos"]
+    grafo = catalog["grafo_1"]  # se usa el grafo de distancias
+    g2 = catalog["grafo_2"]     # para el check de "seguro hacia el este"
+
+    # 1) Nodo más cercano al usuario
+    origen = buscar_nodo_mas_cercano(nodos, lat_user, lon_user)
+
+    # 2) Ejecutar Dijkstra usando la estructura del curso
+    resultado = dk.dijkstra(grafo, origen)
+
+    # 3) Hallar todos los nodos dentro del radio
+    dentro = nodos_en_radio(nodos, origen, radio_km)
+
+    # 4) De todos los nodos dentro del radio, elegir el más lejano (según Dijkstra)
+    mejor = None
+    mejor_dist = -1
+
+    for i in range(lt.size(dentro)):
+        destino = lt.get_element(dentro, i)
+        d = dk.dist_to(resultado, destino)
+
+        if d is not None and d > mejor_dist:
+            mejor_dist = d
+            mejor = destino
+
+    if mejor is None:
+        return None
+
+    # 5) Obtener camino origen → mejor (solo con las estructuras del curso)
+    camino = dk.path_to(resultado, mejor)
+
+    # 6) Medir seguridad (promedio de agua en g2)
+    seguridad_total = 0
+    saltos = 0
+
+    for i in range(lt.size(camino) - 1):
+        u = lt.get_element(camino, i)
+        v = lt.get_element(camino, i + 1)
+
+        w = gp.get_edge_weight(g2, u, v)
+        seguridad_total += w
+        saltos += 1
+
+    if saltos > 0:
+        seguridad_prom = seguridad_total / saltos
+    else:
+        seguridad_prom = 0
+
+    # 7) Preparar respuesta homogénea con REQ 2
+    return {
+        "origen": origen,
+        "destino": mejor,
+        "distancia_total": mejor_dist,
+        "camino": camino,
+        "saltos": lt.size(camino),
+        "seguridad_prom": seguridad_prom
+    }
+
 
 def req_6(catalog):
     """

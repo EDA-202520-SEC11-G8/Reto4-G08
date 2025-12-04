@@ -514,8 +514,114 @@ def print_req_5(control):
     """
         Función que imprime la solución del Requerimiento 5 en consola
     """
-    # TODO: Imprimir el resultado del requerimiento 5
-    pass
+    print("\n===== Resultados del Requerimiento 5 =====")
+
+    # --------------------------
+    # Entrada del usuario
+    # --------------------------
+    lat_o = float(input("Ingrese la latitud del punto de origen: "))
+    lon_o = float(input("Ingrese la longitud del punto de origen: "))
+    lat_d = float(input("Ingrese la latitud del punto de destino: "))
+    lon_d = float(input("Ingrese la longitud del punto de destino: "))
+
+    print("\nSeleccione el grafo a usar:")
+    print("1 - Grafo por DISTANCIA MIGRATORIA")
+    print("2 - Grafo por PROXIMIDAD A FUENTES HÍDRICAS")
+
+    opcion = input("Ingrese 1 o 2: ")
+
+    if opcion == "1":
+        tipo = "distancia"
+    elif opcion == "2":
+        tipo = "agua"
+    else:
+        print("Opción inválida.\n")
+        return
+
+    # --------------------------
+    # Llamado a la lógica
+    # --------------------------
+    inicio = time.time()
+    res = l.req_5(control, lat_o, lon_o, lat_d, lon_d, tipo)
+    fin = time.time()
+
+    print(f"\nTiempo de ejecución: {round((fin - inicio) * 1000, 2)} ms\n")
+
+    # --------------------------
+    # Si no hay camino válido
+    # --------------------------
+    if "mensaje" in res:
+        print(res["mensaje"])
+        print(f"- Nodo origen más cercano : {res['origen']}")
+        print(f"- Nodo destino más cercano: {res['destino']}")
+        print("")
+        return
+
+    # --------------------------
+    # Resumen general
+    # --------------------------
+    print(f"- Nodo migratorio origen : {res['origen']}")
+    print(f"- Nodo migratorio destino: {res['destino']}")
+    print(f"- Costo total del camino : {round(res['costo_total'], 4)}")
+    print(f"- Total de puntos        : {res['total_puntos']}")
+    print(f"- Total de segmentos     : {res['total_segmentos']}\n")
+
+    # --------------------------
+    # Primeros 5 nodos
+    # --------------------------
+    print("Primeros 5 nodos del recorrido:\n")
+
+    filas_1 = []
+    primeros = res["primeros_5_ids"]
+
+    for i in range(lt.size(primeros)):
+        nid = lt.get_element(primeros, i)
+
+        det = buscar_detalle(res["detalles"], nid)
+
+        filas_1.append({
+            "ID": det["id"],
+            "Lat": det["lat"],
+            "Lon": det["lon"],
+            "#Grullas": det["num_grullas"],
+            "3 primeras": det["first3"],
+            "3 últimas": det["last3"],
+            "Dist next": det["dist_next"]
+        })
+
+    print(tb(filas_1, headers="keys", tablefmt="presto"))
+    print("")
+
+    # Si ruta es larga, mostrar "..."
+    if res["total_puntos"] > 10:
+        print("...")
+        print("")
+
+    # --------------------------
+    # Últimos 5 nodos
+    # --------------------------
+    print("Últimos 5 nodos del recorrido:\n")
+
+    filas_2 = []
+    ultimos = res["ultimos_5_ids"]
+
+    for i in range(lt.size(ultimos)):
+        nid = lt.get_element(ultimos, i)
+
+        det = buscar_detalle(res["detalles"], nid)
+
+        filas_2.append({
+            "ID": det["id"],
+            "Lat": det["lat"],
+            "Lon": det["lon"],
+            "#Grullas": det["num_grullas"],
+            "3 primeras": det["first3"],
+            "3 últimas": det["last3"],
+            "Dist next": det["dist_next"]
+        })
+
+    print(tb(filas_2, headers="keys", tablefmt="presto"))
+    print("")
 
 
 def print_req_6(control):
