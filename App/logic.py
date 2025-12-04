@@ -1383,10 +1383,10 @@ def req_5(catalog, lat_o, lon_o, lat_d, lon_d, tipo):
         grafo = catalog["grafo_2"]
 
     # 3. Ejecutar Dijkstra del módulo DataStructures.Graph.dijsktra
-    resultado = dk.Dijkstra(grafo, nodo_origen)
+    resultado = dk.dijkstra(grafo, nodo_origen)
 
     # 4. Extraer camino
-    path = dk.pathTo(resultado, nodo_destino)
+    path = dk.path_to(resultado, nodo_destino)
 
     if path is None:
         return {
