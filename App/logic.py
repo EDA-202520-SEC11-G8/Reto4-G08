@@ -14,7 +14,10 @@ from DataStructures.Graph import vertex as vtx
 from DataStructures.Stack import stack as st
 from DataStructures.Graph import dijsktra as dk
 from DataStructures.Stack import stack as stack
-
+from DataStructures.List import array_list as lt
+from DataStructures.Graph import digraph as dg
+from DataStructures.Graph import dijsktra as dij
+from DataStructures.Stack import stack
 # =============================================================================
 # ----------------------------- ESTRUCTURA PRINCIPAL --------------------------
 # =============================================================================
@@ -674,19 +677,23 @@ def bfs_camino(grafo, origen, destino):
         lt.add_last(path, lt.get_element(rev, i))
 
     return path
-def nodo_mas_cercano(nodos, lat_u, lon_u):
-    mejor = None
-    mejor_d = math.inf
 
-    for i in range(lt.size(nodos)):
-        nd = lt.get_element(nodos, i)
-        d = haversine(lat_u, lon_u, nd["lat"], nd["lon"])
+def get_edge_weight(my_graph, u, v):
+    """
+    Retorna el peso de la arista u -> v usando la estructura real del grafo.
+    Si no existe, retorna None.
+    """
+    vertex_u = gp.get_vertex(my_graph, u)
+    if vertex_u is None:
+        return None
 
-        if d < mejor_d:
-            mejor_d = d
-            mejor = nd["id"]
+    adj = vertex_u["adjacents"]      # Mapa de adyacencias
+    edge = mp.get(adj, v)           # Recuperamos el arco exacto
 
-    return mejor
+    if edge is None:
+        return None
+
+    return edge["weight"]
 
 def ultimo_nodo_en_radio(camino, nodos, nodo_origen, radio_km):
     """
@@ -900,27 +907,56 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
 
 def req_2(catalog, lat_o, lon_o, lat_d, lon_d, radio_km):
     """
-    Detectar movimientos entre dos puntos migratorios alrededor de un área.
-
-    Parámetros:
-        lat_o, lon_o -> coordenadas del origen
-        lat_d, lon_d -> coordenadas del destino
-        radio_km -> radio de interés
-
-    Retorna:
-        Diccionario con toda la información solicitada.
+    Detectar los movimientos de un nicho biológico alrededor de un área.
+    
+    Este requerimiento encuentra el camino más corto (BFS) entre dos puntos
+    migratorios y analiza qué nodos están dentro de un radio de interés
+    desde el punto de origen.
+    
+    Args:
+        catalog (dict): Catálogo con nodos y grafos del sistema.
+        lat_o (float): Latitud del punto de origen.
+        lon_o (float): Longitud del punto de origen.
+        lat_d (float): Latitud del punto de destino.
+        lon_d (float): Longitud del punto de destino.
+        radio_km (float): Radio del área de interés en kilómetros.
+    
+    Returns:
+        dict: Diccionario con toda la información del camino y análisis del área.
+    
+    Algoritmo:
+        1. Encontrar nodos migratorios más cercanos a origen y destino (Haversine)
+        2. Ejecutar BFS para encontrar el camino más corto
+        3. Identificar el último nodo dentro del radio de interés
+        4. Calcular distancia total usando pesos de arcos del grafo
+        5. Construir detalles de los nodos del camino
+        6. Retornar información formateada
     """
-
+    
+    # Obtener estructuras del catálogo
     nodos = catalog["nodos"]
-    grafo = catalog["grafo_1"]
+    grafo = catalog["grafo_1"]  # Grafo de distancias de desplazamiento
 
-    # 1. Encontrar nodos migratorios más cercanos (Haversine)
+    # =========================================================================
+    # PASO 1: Encontrar nodos migratorios más cercanos (Haversine)
+    # =========================================================================
     origen = buscar_nodo_mas_cercano(nodos, lat_o, lon_o)
     destino = buscar_nodo_mas_cercano(nodos, lat_d, lon_d)
 
-    # 2. BFS para encontrar ruta
+    # Validar que se encontraron nodos válidos
+    if origen is None or destino is None:
+        return {
+            "mensaje": "No se encontraron puntos migratorios cercanos.",
+            "origen": origen,
+            "destino": destino
+        }
+
+    # =========================================================================
+    # PASO 2: Ejecutar BFS para encontrar camino más corto
+    # =========================================================================
     camino = bfs_camino(grafo, origen, destino)
 
+    # Validar que existe un camino viable
     if camino is None:
         return {
             "mensaje": "No existe un camino viable entre los puntos.",
@@ -930,86 +966,93 @@ def req_2(catalog, lat_o, lon_o, lat_d, lon_d, radio_km):
 
     total_puntos = lt.size(camino)
 
-    # 3. Último nodo dentro del radio
+    # =========================================================================
+    # PASO 3: Identificar último nodo dentro del radio de interés
+    # =========================================================================
     ultimo_radio = ultimo_nodo_en_radio(camino, nodos, origen, radio_km)
 
-    # 4. Distancia total del recorrido (Haversine)
-    total_distancia = 0
+    # =========================================================================
+    # PASO 4: Calcular distancia total usando PESOS DE ARCOS del grafo
+    # =========================================================================
+    # IMPORTANTE: No usar Haversine directo, sino los pesos ya calculados
+    # en el grafo durante la construcción (promedio de viajes de grullas)
+    
+    total_distancia = 0.0
+    
     for i in range(total_puntos - 1):
-        a = lt.get_element(camino, i)
-        b = lt.get_element(camino, i + 1)
+        nodo_actual = lt.get_element(camino, i)
+        nodo_siguiente = lt.get_element(camino, i + 1)
+        
+        # Obtener peso del arco usando la función auxiliar
+        peso_arco = get_edge_weight(grafo, nodo_actual, nodo_siguiente)
+        
+        if peso_arco is not None:
+            total_distancia += peso_arco
+        else:
+            # Si no existe arco (caso extraño), usar Haversine como fallback
+            na = buscar_nodo_por_id(nodos, nodo_actual)
+            nb = buscar_nodo_por_id(nodos, nodo_siguiente)
+            if na is not None and nb is not None:
+                total_distancia += haversine(na["lat"], na["lon"], 
+                                            nb["lat"], nb["lon"])
 
-        na = buscar_nodo_por_id(nodos, a)
-        nb = buscar_nodo_por_id(nodos, b)
-
-        if na is not None and nb is not None:
-            total_distancia += haversine(na["lat"], na["lon"], nb["lat"], nb["lon"])
-
-    # 5. Detalles de 5 primeros y 5 últimos
-    primeros = lt.new_list()
-    ultimos = lt.new_list()
-
-    limite = 5 if total_puntos >= 5 else total_puntos
-    inicio_u = total_puntos - limite
-
-    # primeros 5
-    for i in range(limite):
-        nid = lt.get_element(camino, i)
-        lt.add_last(primeros, nid)
-
-    # últimos 5
-    for i in range(inicio_u, total_puntos):
-        nid = lt.get_element(camino, i)
-        lt.add_last(ultimos, nid)
-
-    # 6. Información detallada: id, lat, lon, grullas, 3 primeras y 3 últimas, dist siguiente
-    detalles = lt.new_list()
+    # =========================================================================
+    # PASO 5: Construir detalles COMPLETOS de todos los nodos del camino
+    # =========================================================================
+    detalles_completos = lt.new_list()
 
     for i in range(total_puntos):
         nid = lt.get_element(camino, i)
         nodo = buscar_nodo_por_id(nodos, nid)
 
+        # Manejar caso de nodo no encontrado
         if nodo is None:
             info = {
                 "id": nid,
                 "lat": "Unknown",
                 "lon": "Unknown",
                 "num_grullas": "Unknown",
-                "first3": "Unknown",
-                "last3": "Unknown",
+                "first3": lt.new_list(),
+                "last3": lt.new_list(),
                 "dist_next": "Unknown"
             }
-            lt.add_last(detalles, info)
+            lt.add_last(detalles_completos, info)
             continue
 
+        # Extraer información de grullas del nodo
         tags = nodo["grullas"]
         gsize = lt.size(tags)
 
+        # Construir lista de primeras 3 grullas
         first3 = lt.new_list()
-        last3 = lt.new_list()
-
-        limite_g = 3 if gsize >= 3 else gsize
-
-        # primeras 3
-        for j in range(limite_g):
+        limite_first = min(3, gsize)
+        for j in range(limite_first):
             lt.add_last(first3, lt.get_element(tags, j))
 
-        # ultimas 3
-        inicio_g = gsize - 3 if gsize >= 3 else 0
-        for j in range(inicio_g, gsize):
+        # Construir lista de últimas 3 grullas
+        last3 = lt.new_list()
+        inicio_last = max(0, gsize - 3)
+        for j in range(inicio_last, gsize):
             lt.add_last(last3, lt.get_element(tags, j))
 
-        # distancia al siguiente nodo
+        # Calcular distancia al siguiente nodo usando PESO DEL ARCO
+        dist_next = "Unknown"
         if i < total_puntos - 1:
             nxt = lt.get_element(camino, i + 1)
-            nodo2 = buscar_nodo_por_id(nodos, nxt)
-            if nodo2 is not None:
-                dist_sig = haversine(nodo["lat"], nodo["lon"], nodo2["lat"], nodo2["lon"])
+            
+            # Obtener peso del arco del grafo
+            peso_arco = get_edge_weight(grafo, nid, nxt)
+            
+            if peso_arco is not None:
+                dist_next = peso_arco
             else:
-                dist_sig = "Unknown"
-        else:
-            dist_sig = "Unknown"
+                # Fallback: calcular Haversine si no existe arco
+                nodo2 = buscar_nodo_por_id(nodos, nxt)
+                if nodo2 is not None:
+                    dist_next = haversine(nodo["lat"], nodo["lon"], 
+                                         nodo2["lat"], nodo2["lon"])
 
+        # Construir diccionario con información del nodo
         info = {
             "id": nodo["id"],
             "lat": nodo["lat"],
@@ -1017,25 +1060,79 @@ def req_2(catalog, lat_o, lon_o, lat_d, lon_d, radio_km):
             "num_grullas": gsize,
             "first3": first3,
             "last3": last3,
-            "dist_next": dist_sig
+            "dist_next": dist_next
         }
 
-        lt.add_last(detalles, info)
+        lt.add_last(detalles_completos, info)
 
-    # -----------------------------
-    # EMPAQUETAR RESPUESTA
-    # -----------------------------
+    # =========================================================================
+    # PASO 6: Crear lista para mostrar (primeros 5 + separador + últimos 5)
+    # =========================================================================
+    detalles_para_mostrar = lt.new_list()
+    
+    if total_puntos <= 10:
+        # Si hay 10 o menos nodos, mostrar todos sin separador
+        for i in range(total_puntos):
+            lt.add_last(detalles_para_mostrar, 
+                       lt.get_element(detalles_completos, i))
+    else:
+        # Más de 10 nodos: primeros 5 + separador + últimos 5
+        
+        # Agregar primeros 5
+        for i in range(5):
+            lt.add_last(detalles_para_mostrar, 
+                       lt.get_element(detalles_completos, i))
+        
+        # Agregar separador visual
+        lt.add_last(detalles_para_mostrar, {
+            "id": "...",
+            "lat": "...",
+            "lon": "...",
+            "num_grullas": "...",
+            "first3": "...",
+            "last3": "...",
+            "dist_next": "..."
+        })
+        
+        # Agregar últimos 5
+        for i in range(total_puntos - 5, total_puntos):
+            lt.add_last(detalles_para_mostrar, 
+                       lt.get_element(detalles_completos, i))
+
+    # =========================================================================
+    # PASO 7: Construir listas de IDs para primeros y últimos 5 nodos
+    # =========================================================================
+    primeros_5_ids = lt.new_list()
+    ultimos_5_ids = lt.new_list()
+
+    limite_primeros = min(5, total_puntos)
+    inicio_ultimos = max(0, total_puntos - 5)
+
+    # Primeros 5 IDs
+    for i in range(limite_primeros):
+        nid = lt.get_element(camino, i)
+        lt.add_last(primeros_5_ids, nid)
+
+    # Últimos 5 IDs
+    for i in range(inicio_ultimos, total_puntos):
+        nid = lt.get_element(camino, i)
+        lt.add_last(ultimos_5_ids, nid)
+
+    # =========================================================================
+    # RETORNO: Diccionario con toda la información solicitada
+    # =========================================================================
     return {
+        "mensaje": f"Camino encontrado entre {origen} y {destino}",
         "origen": origen,
         "destino": destino,
         "ultimo_en_radio": ultimo_radio,
         "distancia_total": total_distancia,
         "total_puntos": total_puntos,
-        "primeros_5_ids": primeros,
-        "ultimos_5_ids": ultimos,
-        "detalles": detalles
+        "primeros_5_ids": primeros_5_ids,
+        "ultimos_5_ids": ultimos_5_ids,
+        "detalles_mostrar": detalles_para_mostrar,
+        "detalles_completos": detalles_completos  # Por si necesitas todos
     }
-
 
 def req_3(catalog):
     """
@@ -1373,102 +1470,227 @@ def req_4(catalog, lat_o, lon_o):
     }
 
 def req_5(catalog, lat_o, lon_o, lat_d, lon_d, tipo):
-
+    """
+    Identificar la ruta migratoria más eficiente entre dos puntos.
+    
+    Este requerimiento usa el algoritmo de Dijkstra para encontrar el camino
+    de costo mínimo entre dos puntos migratorios. El usuario puede elegir
+    entre optimizar por distancia de desplazamiento o por proximidad a
+    fuentes hídricas.
+    
+    Args:
+        catalog (dict): Catálogo con nodos y grafos del sistema.
+        lat_o (float): Latitud del punto de origen.
+        lon_o (float): Longitud del punto de origen.
+        lat_d (float): Latitud del punto de destino.
+        lon_d (float): Longitud del punto de destino.
+        tipo (str): Tipo de optimización - "distancia" o "hidrico"/"agua"
+    
+    Returns:
+        dict: Diccionario con el camino óptimo y sus características.
+    
+    Algoritmo:
+        1. Seleccionar grafo según tipo (distancia o fuentes hídricas)
+        2. Encontrar nodos migratorios más cercanos a origen y destino
+        3. Ejecutar algoritmo de Dijkstra desde el origen
+        4. Verificar existencia de camino al destino
+        5. Reconstruir camino desde stack de Dijkstra
+        6. Construir detalles de los nodos del camino
+        7. Retornar información formateada
+    
+    Complejidad:
+        Tiempo: O((V + E) log V) por Dijkstra con heap
+        Espacio: O(V) para estructuras de Dijkstra
+    """
+    
+    # Obtener estructuras del catálogo
     nodos = catalog["nodos"]
-
-    # Selección del grafo
-    if tipo == "distancia":
-        grafo = catalog["grafo_1"]
-        grafo_seguridad = catalog["grafo_2"]
+    
+    # =========================================================================
+    # PASO 1: Seleccionar grafo según tipo de optimización
+    # =========================================================================
+    if tipo.lower() == "distancia":
+        grafo = catalog["grafo_1"]  # Grafo de distancias de desplazamiento
+        tipo_texto = "distancia de desplazamiento"
+    elif tipo.lower() in ["hidrico", "agua", "hídrico"]:
+        grafo = catalog["grafo_2"]  # Grafo de proximidad a fuentes hídricas
+        tipo_texto = "proximidad a fuentes hídricas"
     else:
-        grafo = catalog["grafo_2"]
-        grafo_seguridad = catalog["grafo_1"]
-
-    # 1) Nodo migratorio más cercano a origen
-
-    origen = nodo_mas_cercano(nodos, lat_o, lon_o)
-
-    # 2) Nodo migratorio más cercano a destino
-    
-    destino = nodo_mas_cercano(nodos, lat_d, lon_d)
-    
-    # 3) Ejecutar Dijkstra desde el origen
-    
-    search = dk.dijkstra(grafo, origen)
-
-    if not dk.has_path_to(destino, search):
         return {
-            "mensaje": "No existe un camino entre las coordenadas dadas.",
-            "origen": origen,
-            "destino": destino
+            "mensaje": f"Tipo de grafo no válido: '{tipo}'. Use 'distancia' o 'hidrico'.",
+            "tipo_solicitado": tipo
         }
-
     
-    # 4) Costo total hacia destino
+    # =========================================================================
+    # PASO 2: Encontrar nodos migratorios más cercanos (Haversine)
+    # =========================================================================
+    origen = buscar_nodo_mas_cercano(nodos, lat_o, lon_o)
+    destino = buscar_nodo_mas_cercano(nodos, lat_d, lon_d)
     
-    costo_total = dk.dist_to(destino, search)
-
+    # Validar que se encontraron nodos válidos
+    if origen is None or destino is None:
+        return {
+            "mensaje": "No se encontraron puntos migratorios cercanos.",
+            "origen": origen,
+            "destino": destino,
+            "tipo": tipo
+        }
     
-    # 5) Camino exacto (stack)
+    # =========================================================================
+    # PASO 3: Ejecutar algoritmo de Dijkstra desde el origen
+    # =========================================================================
+    # Dijkstra retorna una estructura con:
+    # - marked: nodos visitados
+    # - edge_to: arco que llevó a cada nodo
+    # - dist_to: distancia mínima desde origen a cada nodo
     
-    stack_camino = dk.path_to(destino, search)
-
-    # Convertir stack → lista (lt)
+    search_result = dk.dijkstra(grafo, origen)
+    
+    # =========================================================================
+    # PASO 4: Verificar si existe camino al destino
+    # =========================================================================
+    if not dk.has_path_to(destino, search_result):
+        return {
+            "mensaje": "No existe camino viable entre los puntos especificados.",
+            "origen": origen,
+            "destino": destino,
+            "tipo": tipo_texto
+        }
+    
+    # =========================================================================
+    # PASO 5: Recuperar camino desde stack de Dijkstra
+    # =========================================================================
+    # Dijkstra retorna el camino como un stack (LIFO)
+    # Necesitamos convertirlo a lista en orden correcto
+    
+    stack_camino = dk.path_to(destino, search_result)
     camino = lt.new_list()
-    while not stack.is_empty(stack_camino):
-        v = stack.pop(stack_camino)
-        lt.add_last(camino, v)
-
-    total_puntos = lt.size(camino)
-    total_segmentos = total_puntos - 1
-
-    # 6) Calcular seguridad promedio
-   
-    seguridad_total = 0
-    pasos = 0
-
-    for i in range(total_segmentos):
-        u = lt.get_element(camino, i)
-        v = lt.get_element(camino, i + 1)
-
-        w = gp.get_edge_weight(grafo_seguridad, u, v)
-        if w is None:
-            w = 0
-
-        seguridad_total += w
-        pasos += 1
-
-    if pasos > 0:
-        seguridad_prom = seguridad_total / pasos
-    else:
-        seguridad_prom = 0
-
-    # 7) Preparar detalles para la vista
     
-    primeros_5 = lt.new_list()
-    ultimos_5 = lt.new_list()
-
-    # primeros 5
-    for i in range(min(5, total_puntos)):
-        lt.add_last(primeros_5, lt.get_element(camino, i))
-
-    # últimos 5
-    for i in range(max(0, total_puntos - 5), total_puntos):
-        lt.add_last(ultimos_5, lt.get_element(camino, i))
-
+    # Desapilar todos los nodos y agregarlos a la lista
+    while not st.is_empty(stack_camino):
+        nodo_id = st.pop(stack_camino)
+        lt.add_last(camino, nodo_id)
+    
+    # Obtener métricas del camino
+    costo_total = dk.dist_to(destino, search_result)
+    total_puntos = lt.size(camino)
+    total_arcos = total_puntos - 1
+    
+    # =========================================================================
+    # PASO 6: Construir detalles COMPLETOS de todos los nodos del camino
+    # =========================================================================
+    detalles_completos = lt.new_list()
+    
+    for i in range(total_puntos):
+        nid = lt.get_element(camino, i)
+        nodo = buscar_nodo_por_id(nodos, nid)
+        
+        # Manejar caso de nodo no encontrado
+        if nodo is None:
+            info = {
+                "id": nid,
+                "lat": "Unknown",
+                "lon": "Unknown",
+                "num_grullas": "Unknown",
+                "first3": lt.new_list(),
+                "last3": lt.new_list(),
+                "peso_siguiente": "Unknown"
+            }
+            lt.add_last(detalles_completos, info)
+            continue
+        
+        # Extraer información de grullas del nodo
+        tags = nodo["grullas"]
+        gsize = lt.size(tags)
+        
+        # Construir lista de primeras 3 grullas
+        first3 = lt.new_list()
+        limite_first = min(3, gsize)
+        for j in range(limite_first):
+            lt.add_last(first3, lt.get_element(tags, j))
+        
+        # Construir lista de últimas 3 grullas
+        last3 = lt.new_list()
+        inicio_last = max(0, gsize - 3)
+        for j in range(inicio_last, gsize):
+            lt.add_last(last3, lt.get_element(tags, j))
+        
+        # Calcular peso al siguiente nodo usando el grafo seleccionado
+        peso_siguiente = "Unknown"
+        if i < total_puntos - 1:
+            next_id = lt.get_element(camino, i + 1)
+            
+            # Obtener peso del arco del grafo
+            peso_arco = get_edge_weight(grafo, nid, next_id)
+            
+            if peso_arco is not None:
+                peso_siguiente = peso_arco
+            else:
+                # Este caso no debería ocurrir en un camino válido de Dijkstra
+                # pero lo manejamos por seguridad
+                peso_siguiente = "Unknown"
+        
+        # Construir diccionario con información del nodo
+        info = {
+            "id": nodo["id"],
+            "lat": nodo["lat"],
+            "lon": nodo["lon"],
+            "num_grullas": gsize,
+            "first3": first3,
+            "last3": last3,
+            "peso_siguiente": peso_siguiente
+        }
+        
+        lt.add_last(detalles_completos, info)
+    
+    # =========================================================================
+    # PASO 7: Crear lista para mostrar (primeros 5 + separador + últimos 5)
+    # =========================================================================
+    detalles_para_mostrar = lt.new_list()
+    
+    if total_puntos <= 10:
+        # Si hay 10 o menos nodos, mostrar todos sin separador
+        for i in range(total_puntos):
+            lt.add_last(detalles_para_mostrar, 
+                       lt.get_element(detalles_completos, i))
+    else:
+        # Más de 10 nodos: primeros 5 + separador + últimos 5
+        
+        # Agregar primeros 5
+        for i in range(5):
+            lt.add_last(detalles_para_mostrar, 
+                       lt.get_element(detalles_completos, i))
+        
+        # Agregar separador visual
+        lt.add_last(detalles_para_mostrar, {
+            "id": "...",
+            "lat": "...",
+            "lon": "...",
+            "num_grullas": "...",
+            "first3": "...",
+            "last3": "...",
+            "peso_siguiente": "..."
+        })
+        
+        # Agregar últimos 5
+        for i in range(total_puntos - 5, total_puntos):
+            lt.add_last(detalles_para_mostrar, 
+                       lt.get_element(detalles_completos, i))
+    
+    # =========================================================================
+    # RETORNO: Diccionario con toda la información solicitada
+    # =========================================================================
     return {
+        "mensaje": f"Ruta óptima encontrada usando {tipo_texto}.",
+        "tipo_optimizacion": tipo_texto,
         "origen": origen,
         "destino": destino,
         "costo_total": costo_total,
-        "camino": camino,
         "total_puntos": total_puntos,
-        "total_segmentos": total_segmentos,
-        "seguridad_prom": seguridad_prom,
-        "primeros_5_ids": primeros_5,
-        "ultimos_5_ids": ultimos_5,
-        "detalles": nodos   
+        "total_arcos": total_arcos,
+        "detalles_mostrar": detalles_para_mostrar,
+        "detalles_completos": detalles_completos  # Por si necesitas todos
     }
-
 def req_6(catalog):
     """
     Identifica grupos hídricos aislados (subredes).
