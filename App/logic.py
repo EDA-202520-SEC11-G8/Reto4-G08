@@ -1228,22 +1228,47 @@ def req_4(catalog, lat_o, lon_o):
                                     pq.insert(heap, peso, v)
 
     # 3. Extraer nodos del MST y calcular distancia total (inline)
-    nodos_mst = lt.new_list()
+    nodos_mst_temp = lt.new_list()  # Lista temporal para ordenar
     distancia_total_agua = 0.0
     
+    # Obtener nodo origen para calcular distancias
+    nodo_origen_completo = buscar_nodo_por_id(nodos, origen)
+    lat_origen = nodo_origen_completo["lat"]
+    lon_origen = nodo_origen_completo["lon"]
+    
+    # Recolectar nodos con sus distancias al origen
     claves = mp.key_set(marked)
     for i in range(lt.size(claves)):
         nodo_id = lt.get_element(claves, i)
         esta_marcado = mp.get(marked, nodo_id)
         
         if esta_marcado:
-            lt.add_last(nodos_mst, nodo_id)
+            # Buscar nodo completo para obtener coordenadas
+            nodo_completo = buscar_nodo_por_id(nodos, nodo_id)
+            if nodo_completo is not None:
+                # Calcular distancia al origen
+                dist_origen = haversine(lat_origen, lon_origen, 
+                                       nodo_completo["lat"], nodo_completo["lon"])
+                
+                # Guardar nodo con su distancia
+                lt.add_last(nodos_mst_temp, {
+                    "id": nodo_id,
+                    "distancia": dist_origen
+                })
             
-            # Calcular distancia al mismo tiempo
-            edge = mp.get(edge_from, nodo_id)
-            if edge is not None:
-                distancia_total_agua += edge["weight"]
+            # Calcular distancia total del MST
+            if nodo_id != origen:
+                edge = mp.get(edge_from, nodo_id)
+                if edge is not None:
+                    distancia_total_agua += edge["weight"]
     
+    def cmp_distancia(nodo1, nodo2):
+        return nodo1["distancia"] <= nodo2["distancia"]
+    nodos_ordenados = lt.merge_sort(nodos_mst_temp, cmp_distancia)
+    nodos_mst = lt.new_list()
+    for i in range(lt.size(nodos_ordenados)):
+        nodo_con_dist = lt.get_element(nodos_ordenados, i)
+        lt.add_last(nodos_mst, nodo_con_dist["id"])
     total_puntos = lt.size(nodos_mst)
 
     # 4. Recolectar individuos únicos que usan el corredor
