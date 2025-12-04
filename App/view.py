@@ -110,6 +110,15 @@ def load_data(control):
     print("\n--- Últimos 5 nodos ---")
     print(tb(nodos_to_table(nodos, primeros=False, incluir_distancia=True), headers="keys", tablefmt="grid"))
 
+def buscar_detalle(detalles, nid):
+    """
+    Busca en la lista 'detalles' la info del nodo con id = nid.
+    """
+    for i in range(lt.size(detalles)):
+        d = lt.get_element(detalles, i)
+        if d["id"] == nid:
+            return d
+    return None
 
 def nodos_to_table(nodos, primeros=True, incluir_distancia=False):
     """
@@ -189,16 +198,155 @@ def print_req_2(control):
     """
         Función que imprime la solución del Requerimiento 2 en consola
     """
-    # TODO: Imprimir el resultado del requerimiento 2
-    pass
+    print("\n===== Resultados del Requerimiento 2 =====")
+
+    # Pedir parámetros al usuario
+    lat_o = float(input("Ingrese la latitud del punto de origen: "))
+    lon_o = float(input("Ingrese la longitud del punto de origen: "))
+    lat_d = float(input("Ingrese la latitud del punto de destino: "))
+    lon_d = float(input("Ingrese la longitud de destino: "))
+    radio = float(input("Ingrese el radio de interés (km): "))
+
+    # Ejecutar requerimiento
+    inicio = time.time()
+    res = l.req_2(control, lat_o, lon_o, lat_d, lon_d, radio)
+    fin = time.time()
+
+    print(f"\nTiempo de ejecución: {round((fin - inicio) * 1000, 2)} ms\n")
+
+    # Si no hay camino
+    if "mensaje" in res:
+        print(res["mensaje"])
+        print(f"- Nodo origen más cercano : {res['origen']}")
+        print(f"- Nodo destino más cercano: {res['destino']}")
+        print("")
+        return
+
+    # -------------------------
+    # Resumen general del REQ 2
+    # -------------------------
+    print(f"- Nodo migratorio origen : {res['origen']}")
+    print(f"- Nodo migratorio destino: {res['destino']}")
+    print(f"- Último nodo dentro del área (radio={radio} km): {res['ultimo_en_radio']}")
+    print(f"- Distancia total del camino (km): {round(res['distancia_total'], 4)}")
+    print(f"- Total de puntos del camino: {res['total_puntos']}\n")
+
+    # -------------------------
+    #  Tablas: primeros 5 / últimos 5
+    # -------------------------
+    print("Primeros 5 nodos del recorrido:\n")
+
+    filas = []
+    primeros = res["primeros_5_ids"]
+
+    for i in range(lt.size(primeros)):
+        nid = lt.get_element(primeros, i)
+
+        # Buscar info detallada correspondiente
+        det = buscar_detalle(res["detalles"], nid)
+
+        filas.append({
+            "ID": det["id"],
+            "Lat": det["lat"],
+            "Lon": det["lon"],
+            "#Grullas": det["num_grullas"],
+            "3 primeras": det["first3"],
+            "3 últimas": det["last3"],
+            "Dist next": det["dist_next"]
+        })
+
+    print(tb(filas, headers="keys", tablefmt="presto"))
+    print("")
+
+    # Si hay puntos intermedios largos
+    if res["total_puntos"] > 10:
+        print("...")
+        print("")
+
+    print("Últimos 5 nodos del recorrido:\n")
+
+    filas2 = []
+    ultimos = res["ultimos_5_ids"]
+
+    for i in range(lt.size(ultimos)):
+        nid = lt.get_element(ultimos, i)
+
+        det = buscar_detalle(res["detalles"], nid)
+
+        filas2.append({
+            "ID": det["id"],
+            "Lat": det["lat"],
+            "Lon": det["lon"],
+            "#Grullas": det["num_grullas"],
+            "3 primeras": det["first3"],
+            "3 últimas": det["last3"],
+            "Dist next": det["dist_next"]
+        })
+
+    print(tb(filas2, headers="keys", tablefmt="presto"))
+    print("")
 
 
 def print_req_3(control):
     """
         Función que imprime la solución del Requerimiento 3 en consola
     """
-    # TODO: Imprimir el resultado del requerimiento 3
-    pass
+    inicio = time.time()
+    res = l.req_3(control)
+    
+    fin = inicio = time.time()
+    
+    print("\n===== Resultados del Requerimiento 3 =====")
+    print(f"Tiempo de ejecución: {fin - inicio} ms\n")
+    if "mensaje" in res:
+        print(res["mensaje"])
+        print("")
+        return
+    print(f"- Total de puntos en la ruta : {res['total_puntos']}")
+    print(f"- Total de individuos que usan la ruta : {res['total_individuos']}")
+    
+    filas = []
+    N = 5
+    primeros = res["primeros_5"]
+    ultimos = res["ultimos_5"]
+    
+    for p in primeros:
+        filas.append({
+            "ID": p["id"],
+            "Lat": p["lat"],
+            "Lon": p["lon"],
+            "#Grullas": p["num_grullas"],
+            "3 primeras": p["first3"],
+            "3 últimas": p["last3"],
+            "Dist prev": p["dist_prev"],
+            "Dist next": p["dist_next"]
+        })
+        
+    if res["total_puntos"] > 2 * N:
+        filas.append({
+            "ID": "...", "Lat": "...", "Lon": "...",
+            "#Grullas": "...",
+            "3 primeras": "...",
+            "3 últimas": "...",
+            "Dist prev": "...",
+            "Dist next": "..."
+        })
+
+    # últimos 5
+    for p in ultimos:
+        filas.append({
+            "ID": p["id"],
+            "Lat": p["lat"],
+            "Lon": p["lon"],
+            "#Grullas": p["num_grullas"],
+            "3 primeras": p["first3"],
+            "3 últimas": p["last3"],
+            "Dist prev": p["dist_prev"],
+            "Dist next": p["dist_next"]
+        })
+
+    print(tb(filas, headers="keys", tablefmt="presto"))
+    print("")
 
 
 def print_req_4(control):
@@ -219,11 +367,98 @@ def print_req_5(control):
 
 def print_req_6(control):
     """
-        Función que imprime la solución del Requerimiento 6 en consola
+    Función que imprime la solución del Requerimiento 6 en consola.
     """
-    # TODO: Imprimir el resultado del requerimiento 6
-    pass
-
+    print("\nEjecutando análisis de subredes hídricas (Req 6)...")
+    
+    start = l.get_time()
+    resultado = l.req_6(control) # Retorna diccionario
+    end = l.get_time()
+    
+    tiempo = round(l.delta_time(start, end), 2)
+    
+    # Extraer datos del retorno
+    total = resultado["total_subredes"]
+    lista = resultado["subredes"]
+    
+    print(f"\n===== Resultados del Requerimiento 6 =====")
+    print(f"Tiempo de ejecución: {tiempo} ms")
+    print(f"Total de subredes hídricas identificadas: {total}")
+    
+    # Definir cuántas mostrar (Top 5) 
+    cantidad_mostrar = 5
+    if total < 5:
+        cantidad_mostrar = total
+        
+    print(f"\nMostrando las {cantidad_mostrar} subredes más grandes:\n")
+    
+    for i in range(cantidad_mostrar):
+        sub = lt.get_element(lista, i)
+        
+        # Datos generales
+        id_sub = sub["id_subred"]
+        n_puntos = sub["total_nodos"]
+        n_ind = sub["total_individuos"]
+        lat_min, lat_max = sub["rango_lat"]
+        lon_min, lon_max = sub["rango_lon"]
+        
+        print(f"--------------------------------------------------")
+        print(f"SUBRED {id_sub}")
+        print(f" > Total Puntos Migratorios : {n_puntos}")
+        print(f" > Total Individuos         : {n_ind}")
+        print(f" > Latitud (Min, Max)       : ({lat_min:.4f}, {lat_max:.4f})")
+        print(f" > Longitud (Min, Max)      : ({lon_min:.4f}, {lon_max:.4f})")
+        
+        # Tabla de puntos (3 primeros / 3 últimos)
+        print("\n > Detalle de Puntos (3 primeros / 3 últimos):")
+        
+        filas_tabla = []
+        
+        # Procesar primeros 3 nodos
+        p_nodos = sub["primeros_nodos"]
+        for k in range(lt.size(p_nodos)):
+            nodo = lt.get_element(p_nodos, k)
+            filas_tabla.append({
+                "ID": nodo["id"],
+                "Lat": f"{nodo['lat']:.4f}",
+                "Lon": f"{nodo['lon']:.4f}"
+            })
+            
+        # Separador visual si hay muchos nodos
+        if n_puntos > 6:
+            filas_tabla.append({"ID": "...", "Lat": "...", "Lon": "..."})
+            
+        # Procesar últimos 3 nodos
+        u_nodos = sub["ultimos_nodos"]
+        for k in range(lt.size(u_nodos)):
+            nodo = lt.get_element(u_nodos, k)
+            filas_tabla.append({
+                "ID": nodo["id"],
+                "Lat": f"{nodo['lat']:.4f}",
+                "Lon": f"{nodo['lon']:.4f}"
+            })
+            
+        print(tb(filas_tabla, headers="keys", tablefmt="presto"))
+        
+        # Listado de grullas (3 primeras / 3 últimas)
+        print("\n > Grullas en la subred (Tags):")
+        tags_str = []
+        
+        p_grullas = sub["primeras_grullas"]
+        for k in range(lt.size(p_grullas)):
+            tags_str.append(str(lt.get_element(p_grullas, k)))
+            
+        if n_ind > 6:
+            tags_str.append("...")
+            
+        u_grullas = sub["ultimas_grullas"]
+        for k in range(lt.size(u_grullas)):
+            tags_str.append(str(lt.get_element(u_grullas, k)))
+            
+        print(f"   [{', '.join(tags_str)}]")
+        print("")
+        
+        
 # Se crea la lógica asociado a la vista
 control = new_logic()
 
@@ -255,7 +490,7 @@ def main():
         elif int(inputs) == 5:
             print_req_5(control)
 
-        elif int(inputs) == 5:
+        elif int(inputs) == 6:
             print_req_6(control)
 
         elif int(inputs) == 7:
