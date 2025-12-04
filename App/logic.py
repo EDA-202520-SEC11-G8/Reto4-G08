@@ -1,5 +1,6 @@
 import time
 import csv
+import math
 from math import radians, sin, cos, sqrt, atan2
 from datetime import datetime
 import sys
@@ -12,6 +13,7 @@ from DataStructures.Graph import dfs as DFS
 from DataStructures.Graph import vertex as vtx
 from DataStructures.Stack import stack as st
 from DataStructures.Graph import dijsktra as dk
+from DataStructures.Stack import stack as stack
 
 # =============================================================================
 # ----------------------------- ESTRUCTURA PRINCIPAL --------------------------
@@ -672,6 +674,19 @@ def bfs_camino(grafo, origen, destino):
         lt.add_last(path, lt.get_element(rev, i))
 
     return path
+def nodo_mas_cercano(nodos, lat_u, lon_u):
+    mejor = None
+    mejor_d = math.inf
+
+    for i in range(lt.size(nodos)):
+        nd = lt.get_element(nodos, i)
+        d = haversine(lat_u, lon_u, nd["lat"], nd["lon"])
+
+        if d < mejor_d:
+            mejor_d = d
+            mejor = nd["id"]
+
+    return mejor
 
 def ultimo_nodo_en_radio(camino, nodos, nodo_origen, radio_km):
     """
@@ -707,24 +722,16 @@ def ultimo_nodo_en_radio(camino, nodos, nodo_origen, radio_km):
     return ultimo
 
 
-def nodos_en_radio(nodos, nodo_origen, radio_km):
-    """
-    Devuelve lista de nodos cuyo centro está dentro del radio indicado.
-     en array_list del curso.
-    """
-
+def nodos_en_radio(nodos, origen_info, radio_km):
     lista = lt.new_list()
-    origen = buscar_nodo_por_id(nodos, nodo_origen)
-
-    lat0 = origen["lat"]
-    lon0 = origen["lon"]
 
     for i in range(lt.size(nodos)):
-        nodo = lt.get_element(nodos, i)
-        d = haversine(lat0, lon0, nodo["lat"], nodo["lon"])
+        nd = lt.get_element(nodos, i)
+
+        d = haversine(origen_info["lat"], origen_info["lon"], nd["lat"], nd["lon"])
 
         if d <= radio_km:
-            lt.add_last(lista, nodo["id"])
+            lt.add_last(lista, nd["id"])
 
     return lista
 
@@ -1369,47 +1376,97 @@ def req_5(catalog, lat_o, lon_o, lat_d, lon_d, tipo):
 
     nodos = catalog["nodos"]
 
-    # 1. Encontrar nodos más cercanos
-    nodo_origen = buscar_nodo_mas_cercano(nodos, lat_o, lon_o)
-    nodo_destino = buscar_nodo_mas_cercano(nodos, lat_d, lon_d)
-
-    if nodo_origen is None or nodo_destino is None:
-        return None
-
-    # 2. Seleccionar grafo
-    if tipo == "1":
+    # Selección del grafo
+    if tipo == "distancia":
         grafo = catalog["grafo_1"]
+        grafo_seguridad = catalog["grafo_2"]
     else:
         grafo = catalog["grafo_2"]
+        grafo_seguridad = catalog["grafo_1"]
 
-    # 3. Ejecutar Dijkstra del módulo DataStructures.Graph.dijsktra
-    resultado = dk.dijkstra(grafo, nodo_origen)
+    # 1) Nodo migratorio más cercano a origen
 
-    # 4. Extraer camino
-    path = dk.path_to(resultado, nodo_destino)
+    origen = nodo_mas_cercano(nodos, lat_o, lon_o)
 
-    if path is None:
+    # 2) Nodo migratorio más cercano a destino
+    
+    destino = nodo_mas_cercano(nodos, lat_d, lon_d)
+    
+    # 3) Ejecutar Dijkstra desde el origen
+    
+    search = dk.dijkstra(grafo, origen)
+
+    if not dk.has_path_to(destino, search):
         return {
-            "origen": nodo_origen,
-            "destino": nodo_destino,
-            "distancia_total": None,
-            "camino": None
+            "mensaje": "No existe un camino entre las coordenadas dadas.",
+            "origen": origen,
+            "destino": destino
         }
 
-    # 5. Convertir pila a lista
-    camino = lt.new_list()
-    distancia_total = 0
+    
+    # 4) Costo total hacia destino
+    
+    costo_total = dk.dist_to(destino, search)
 
-    while not st.is_empty(path):
-        paso = st.pop(path)
-        lt.add_last(camino, paso["vertex"])
-        distancia_total = paso["distance"]
+    
+    # 5) Camino exacto (stack)
+    
+    stack_camino = dk.path_to(destino, search)
+
+    # Convertir stack → lista (lt)
+    camino = lt.new_list()
+    while not stack.is_empty(stack_camino):
+        v = stack.pop(stack_camino)
+        lt.add_last(camino, v)
+
+    total_puntos = lt.size(camino)
+    total_segmentos = total_puntos - 1
+
+    # 6) Calcular seguridad promedio
+   
+    seguridad_total = 0
+    pasos = 0
+
+    for i in range(total_segmentos):
+        u = lt.get_element(camino, i)
+        v = lt.get_element(camino, i + 1)
+
+        w = gp.get_edge_weight(grafo_seguridad, u, v)
+        if w is None:
+            w = 0
+
+        seguridad_total += w
+        pasos += 1
+
+    if pasos > 0:
+        seguridad_prom = seguridad_total / pasos
+    else:
+        seguridad_prom = 0
+
+    # 7) Preparar detalles para la vista
+    
+    primeros_5 = lt.new_list()
+    ultimos_5 = lt.new_list()
+
+    # primeros 5
+    for i in range(min(5, total_puntos)):
+        lt.add_last(primeros_5, lt.get_element(camino, i))
+
+    # últimos 5
+    for i in range(max(0, total_puntos - 5), total_puntos):
+        lt.add_last(ultimos_5, lt.get_element(camino, i))
 
     return {
-        "origen": nodo_origen,
-        "destino": nodo_destino,
-        "distancia_total": distancia_total,
-        "camino": camino
+        "origen": origen,
+        "destino": destino,
+        "costo_total": costo_total,
+        "camino": camino,
+        "total_puntos": total_puntos,
+        "total_segmentos": total_segmentos,
+        "seguridad_prom": seguridad_prom,
+        "primeros_5_ids": primeros_5,
+        "ultimos_5_ids": ultimos_5,
+        "detalles": nodos   
     }
 
 def req_6(catalog):
