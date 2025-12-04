@@ -1365,7 +1365,7 @@ def req_4(catalog, lat_o, lon_o):
         "detalles_mostrar": detalles_para_mostrar
     }
 
-def req5(catalog, lat_user, lon_user, radio_km):
+def req_5(catalog, lat_user, lon_user, radio_km):
 
     nodos = catalog["nodos"]
     grafo = catalog["grafo_1"]  # se usa el grafo de distancias
