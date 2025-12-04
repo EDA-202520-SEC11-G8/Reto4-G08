@@ -727,9 +727,7 @@ def nodos_en_radio(nodos, nodo_origen, radio_km):
             lt.add_last(lista, nodo["id"])
 
     return lista
-# Funciones de consulta sobre el catálogo
 
-def req_1(catalog):
 def ejecutar_prim(grafo, origen):
     """
     Ejecuta el algoritmo de Prim para encontrar el MST.
