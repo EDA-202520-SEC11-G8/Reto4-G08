@@ -170,72 +170,6 @@ def contar_grullas(nodos):
 
     return len(grullas)
 
-def convertir_a_filas(detalles_lista, incluir_distancia=True):
-    filas = []
-
-    for i in range(lt.size(detalles_lista)):
-        nodo = lt.get_element(detalles_lista, i)
-
-        lat = nodo.get("lat")
-        if lat is None or lat == "...":
-            lat_final = "..."
-        else:
-            lat_float = float(lat)
-            lat_final = round(lat_float, 4)
-
-        lon = nodo.get("lon")
-        if lon is None or lon == "...":
-            lon_final = "..."
-        else:
-            lon_float = float(lon)
-            lon_final = round(lon_float, 4)
-
-        first3 = nodo.get("first3")
-        if isinstance(first3, dict):
-            lista_first = []
-            for j in range(lt.size(first3)):
-                item = lt.get_element(first3, j)
-                lista_first.append(str(item))
-
-            if len(lista_first) > 0:
-                first3_final = ", ".join(lista_first)
-            else:
-                first3_final = "N/A"
-        else:
-            first3_final = "..."
-
-        last3 = nodo.get("last3")
-        if isinstance(last3, dict):
-            lista_last = []
-            for j in range(lt.size(last3)):
-                item = lt.get_element(last3, j)
-                lista_last.append(str(item))
-
-            if len(lista_last) > 0:
-                last3_final = ", ".join(lista_last)
-            else:
-                last3_final = "N/A"
-        else:
-            last3_final = "..."
-
-        fila = {
-            "ID": nodo.get("id"),
-            "Lat": lat_final,
-            "Lon": lon_final,
-            "#Grullas": nodo.get("num_grullas"),
-            "3 primeras": first3_final,
-            "3 últimas": last3_final
-        }
-
-        if incluir_distancia:
-            fila["Dist next"] = nodo.get("dist_next")
-
-        filas.append(fila)
-
-    return filas
-
-
-
 
 def print_data(control, id):
     """
@@ -250,55 +184,83 @@ def print_req_1(control):
     """
     print("\n===== Resultados del Requerimiento 1 =====")
     
-    # === Pedir parámetros ===
+    # Entrada del usuario
     lat_o = float(input("Ingrese la latitud del punto de origen: "))
     lon_o = float(input("Ingrese la longitud del punto de origen: "))
     lat_d = float(input("Ingrese la latitud del punto de destino: "))
     lon_d = float(input("Ingrese la longitud del punto de destino: "))
     crane_id = input("Ingrese el identificador único de la grulla: ")
     
-    # === Ejecutar requerimiento ===
+    # Ejecutar requerimiento
     inicio = time.time()
     res = l.req_1(control, lat_o, lon_o, lat_d, lon_d, crane_id)
     fin = time.time()
     
-    tiempo_ms = round((fin - inicio) * 1000, 2)
-    print(f"\nTiempo de ejecución: {tiempo_ms} ms\n")
+    print(f"\nTiempo de ejecución: {round((fin - inicio) * 1000, 2)} ms\n")
     
-    # === Si no hay detalles (error o sin camino) ===
-    tiene_detalles = "detalles_mostrar" in res
-    
-    if not tiene_detalles:
-        mensaje = res.get("mensaje", "No se encontró información del camino.")
-        origen = res.get('origen', 'Unknown')
-        destino = res.get('destino', 'Unknown')
-        
-        print(mensaje)
-        print(f"- Nodo origen más cercano : {origen}")
-        print(f"- Nodo destino más cercano: {destino}")
+    # Verificar si hay camino válido
+    if "detalles_mostrar" not in res:
+        print(res.get("mensaje", "No se encontró información del camino."))
+        print(f"- Nodo origen más cercano : {res.get('origen', 'Unknown')}")
+        print(f"- Nodo destino más cercano: {res.get('destino', 'Unknown')}")
         print("")
         return
     
-    # === Resumen general ===
-    mensaje = res["mensaje"]
-    origen = res.get('origen', 'Unknown')
-    grulla = res.get('grulla', 'Unknown')
-    distancia = res.get('distancia_total', 0)
-    total_puntos = res.get('total_puntos', 0)
-    
-    print(mensaje)
-    print(f"- Primer nodo donde se encuentra la grulla: {origen}")
-    print(f"- Grulla identificada : {grulla}")
-    print(f"- Distancia total del camino (km): {round(distancia, 2)}")
-    print(f"- Total de puntos del camino: {total_puntos}\n")
+    # Resumen general
+    print(res["mensaje"])
+    print(f"- Primer nodo donde se encuentra la grulla: {res['origen']}")
+    print(f"- Grulla identificada : {res['grulla']}")
+    print(f"- Distancia total del camino (km): {round(res['distancia_total'], 2)}")
+    print(f"- Total de puntos del camino: {res['total_puntos']}\n")
     
     print("Nodos del recorrido (primeros 5 y últimos 5):\n")
     
-    detalles_mostrar = res.get("detalles_mostrar", lt.new_list())
-    filas_tabla = convertir_a_filas(detalles_mostrar, incluir_distancia=True)
-    tabla = tb(filas_tabla, headers="keys", tablefmt="presto")
+    # Construir tabla directamente (inline de convertir_a_filas)
+    filas = []
+    detalles = res["detalles_mostrar"]
     
-    print(tabla)
+    for i in range(lt.size(detalles)):
+        nodo = lt.get_element(detalles, i)
+        
+        # Procesar latitud
+        lat = nodo.get("lat")
+        lat_final = "..." if lat == "..." else round(float(lat), 4)
+        
+        # Procesar longitud
+        lon = nodo.get("lon")
+        lon_final = "..." if lon == "..." else round(float(lon), 4)
+        
+        # Procesar first3
+        first3 = nodo.get("first3")
+        if first3 == "...":
+            first3_final = "..."
+        else:
+            lista_first = []
+            for j in range(lt.size(first3)):
+                lista_first.append(str(lt.get_element(first3, j)))
+            first3_final = ", ".join(lista_first) if lista_first else "N/A"
+        
+        # Procesar last3
+        last3 = nodo.get("last3")
+        if last3 == "...":
+            last3_final = "..."
+        else:
+            lista_last = []
+            for j in range(lt.size(last3)):
+                lista_last.append(str(lt.get_element(last3, j)))
+            last3_final = ", ".join(lista_last) if lista_last else "N/A"
+        
+        filas.append({
+            "ID": nodo.get("id"),
+            "Lat": lat_final,
+            "Lon": lon_final,
+            "#Grullas": nodo.get("num_grullas"),
+            "3 primeras": first3_final,
+            "3 últimas": last3_final,
+            "Dist next": nodo.get("dist_next")
+        })
+    
+    print(tb(filas, headers="keys", tablefmt="presto"))
     print("")
 
 
@@ -463,50 +425,78 @@ def print_req_4(control):
     """
     print("\n===== Resultados del Requerimiento 4 =====")
     
-    # === Pedir parámetros ===
+    # Entrada del usuario
     lat_o = float(input("Ingrese la latitud del punto de origen: "))
     lon_o = float(input("Ingrese la longitud del punto de origen: "))
     
-    # === Ejecutar requerimiento ===
+    # Ejecutar requerimiento
     inicio = time.time()
     res = l.req_4(control, lat_o, lon_o)
     fin = time.time()
     
-    tiempo_ms = round((fin - inicio) * 1000, 2)
-    print(f"\nTiempo de ejecución: {tiempo_ms} ms\n")
+    print(f"\nTiempo de ejecución: {round((fin - inicio) * 1000, 2)} ms\n")
     
-    # === Si no hay detalles (error) ===
-    tiene_detalles = "detalles_mostrar" in res
-    
-    if not tiene_detalles:
-        mensaje = res.get("mensaje", "No se pudo construir el corredor hídrico.")
-        origen = res.get('origen', 'Unknown')
-        
-        print(mensaje)
-        print(f"- Nodo origen más cercano : {origen}")
+    # Verificar si hay detalles válidos
+    if "detalles_mostrar" not in res:
+        print(res.get("mensaje", "No se pudo construir el corredor hídrico."))
+        print(f"- Nodo origen más cercano : {res.get('origen', 'Unknown')}")
         print("")
         return
     
-    # === Resumen general ===
-    mensaje = res["mensaje"]
-    origen = res.get('origen', 'Unknown')
-    total_puntos = res.get('total_puntos', 0)
-    total_individuos = res.get('total_individuos', 0)
-    distancia_agua = res.get('distancia_total_agua', 0)
-    
-    print(mensaje)
-    print(f"- Nodo migratorio origen : {origen}")
-    print(f"- Total de puntos en el corredor: {total_puntos}")
-    print(f"- Total de individuos que usan el corredor: {total_individuos}")
-    print(f"- Distancia total del corredor a fuentes hídricas (km): {round(distancia_agua, 2)}\n")
+    # Resumen general
+    print(res["mensaje"])
+    print(f"- Nodo migratorio origen : {res['origen']}")
+    print(f"- Total de puntos en el corredor: {res['total_puntos']}")
+    print(f"- Total de individuos que usan el corredor: {res['total_individuos']}")
+    print(f"- Distancia total del corredor a fuentes hídricas (km): {round(res['distancia_total_agua'], 2)}\n")
 
     print("Nodos del corredor hídrico (primeros 5 y últimos 5):\n")
     
-    detalles_mostrar = res.get("detalles_mostrar", lt.new_list())
-    filas_tabla = convertir_a_filas(detalles_mostrar, incluir_distancia=False)
-    tabla = tb(filas_tabla, headers="keys", tablefmt="presto")
+    # Construir tabla directamente (inline de convertir_a_filas)
+    filas = []
+    detalles = res["detalles_mostrar"]
     
-    print(tabla)
+    for i in range(lt.size(detalles)):
+        nodo = lt.get_element(detalles, i)
+        
+        # Procesar latitud
+        lat = nodo.get("lat")
+        lat_final = "..." if lat == "..." else round(float(lat), 4)
+        
+        # Procesar longitud
+        lon = nodo.get("lon")
+        lon_final = "..." if lon == "..." else round(float(lon), 4)
+        
+        # Procesar first3
+        first3 = nodo.get("first3")
+        if first3 == "...":
+            first3_final = "..."
+        else:
+            lista_first = []
+            for j in range(lt.size(first3)):
+                lista_first.append(str(lt.get_element(first3, j)))
+            first3_final = ", ".join(lista_first) if lista_first else "N/A"
+        
+        # Procesar last3
+        last3 = nodo.get("last3")
+        if last3 == "...":
+            last3_final = "..."
+        else:
+            lista_last = []
+            for j in range(lt.size(last3)):
+                lista_last.append(str(lt.get_element(last3, j)))
+            last3_final = ", ".join(lista_last) if lista_last else "N/A"
+        
+        filas.append({
+            "ID": nodo.get("id"),
+            "Lat": lat_final,
+            "Lon": lon_final,
+            "#Grullas": nodo.get("num_grullas"),
+            "3 primeras": first3_final,
+            "3 últimas": last3_final
+        })
+    
+    print(tb(filas, headers="keys", tablefmt="presto"))
     print("")
 
 

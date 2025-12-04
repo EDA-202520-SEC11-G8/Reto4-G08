@@ -728,143 +728,6 @@ def nodos_en_radio(nodos, nodo_origen, radio_km):
 
     return lista
 
-def ejecutar_prim(grafo, origen):
-    """
-    Ejecuta el algoritmo de Prim para encontrar el MST.
-    Implementación simplificada usando las estructuras del curso.
-    
-    Args:
-        grafo: grafo dirigido
-        origen: nodo de inicio
-    
-    Returns:
-        Diccionario con edge_from (mapa de nodo -> arco de entrada)
-    """
-    import math
-    from DataStructures.Map import priority_queue as pq
-    
-    # Obtener todos los vértices del grafo
-    vertices = gp.vertices(grafo)
-    num_vertices = lt.size(vertices)
-
-    # Crear estructuras para Prim
-    marked = mp.new_map(num_vertices, 0.5)
-    edge_from = mp.new_map(num_vertices, 0.5)
-    dist_to = mp.new_map(num_vertices, 0.5)
-    heap = pq.new_heap(is_min_pq=True)
-
-    # Inicializar todas las distancias a infinito
-    for i in range(num_vertices):
-        v = lt.get_element(vertices, i)
-        mp.put(marked, v, False)
-        mp.put(dist_to, v, math.inf)
-        mp.put(edge_from, v, None)
-
-    # El origen tiene distancia 0
-    mp.put(dist_to, origen, 0)
-    pq.insert(heap, 0, origen)
-
-    # Algoritmo de Prim
-    while not pq.is_empty(heap):
-        # Extraer vértice con menor distancia
-        u = pq.remove(heap)
-        
-        # Marcar como visitado
-        ya_marcado = mp.get(marked, u)
-        if ya_marcado:
-            pass  # Ya procesado, saltar (sin continue)
-        else:
-            mp.put(marked, u, True)
-
-            # Obtener adyacentes de u
-            vertex = gp.get_vertex(grafo, u)
-            
-            if vertex is not None:
-                adjs = gp.adjacents(grafo, u)
-
-                for j in range(lt.size(adjs)):
-                    v = lt.get_element(adjs, j)
-                    
-                    v_marcado = mp.get(marked, v)
-                    
-                    if not v_marcado:
-                        # Obtener peso del arco u -> v
-                        edge = vtx.get_edge(vertex, v)
-                        
-                        if edge is not None:
-                            peso = edge["weight"]
-                            dist_actual = mp.get(dist_to, v)
-
-                            # Relajar arco si encontramos menor peso
-                            if peso < dist_actual:
-                                mp.put(dist_to, v, peso)
-                                mp.put(edge_from, v, {"from": u, "to": v, "weight": peso})
-                                
-                                # Actualizar heap
-                                existe_en_heap = pq.contains(heap, v)
-                                if existe_en_heap:
-                                    pq.improve_priority(heap, peso, v)
-                                else:
-                                    pq.insert(heap, peso, v)
-
-    return {"edge_from": edge_from, "marked": marked}
-
-
-def extraer_nodos_mst(mst_result, grafo, origen):
-    """
-    Extrae todos los nodos que forman parte del MST.
-    
-    Args:
-        mst_result: resultado del algoritmo de Prim
-        grafo: grafo dirigido
-        origen: nodo de inicio
-    
-    Returns:
-        Lista con los IDs de los nodos del MST
-    """
-    edge_from = mst_result["edge_from"]
-    marked = mst_result["marked"]
-    
-    nodos_mst = lt.new_list()
-    
-    # Obtener todos los nodos marcados (alcanzables desde origen)
-    claves = mp.key_set(marked)
-    
-    for i in range(lt.size(claves)):
-        nodo_id = lt.get_element(claves, i)
-        esta_marcado = mp.get(marked, nodo_id)
-        
-        if esta_marcado:
-            lt.add_last(nodos_mst, nodo_id)
-    
-    return nodos_mst
-
-
-def calcular_distancia_total_mst(mst_result, nodos_mst):
-    """
-    Calcula la distancia total a fuentes hídricas del MST.
-    Suma los pesos de todos los arcos en el MST.
-    
-    Args:
-        mst_result: resultado del algoritmo de Prim
-        nodos_mst: lista de nodos en el MST
-    
-    Returns:
-        float: suma de pesos de arcos del MST
-    """
-    edge_from = mst_result["edge_from"]
-    distancia_total = 0.0
-    
-    for i in range(lt.size(nodos_mst)):
-        nodo_id = lt.get_element(nodos_mst, i)
-        edge = mp.get(edge_from, nodo_id)
-        
-        if edge is not None:
-            peso = edge["weight"]
-            distancia_total = distancia_total + peso
-    
-    return distancia_total
-
 # Funciones de consulta sobre el catálogo
 def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
     """
@@ -873,11 +736,19 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
     """
     nodos = catalog["nodos"]
     grafo = catalog["grafo_1"]
-    # 1. Encontrar nodos migratorios más cercanos
+    
+    # 1. Encontrar nodos más cercanos usando función auxiliar
     origen = buscar_nodo_mas_cercano(nodos, lat_o, lon_o)
     destino = buscar_nodo_mas_cercano(nodos, lat_d, lon_d)
-    # 2. Verificación de grulla en origen
-    nodo_origen_obj = buscar_nodo_por_id(nodos, origen)
+    
+    # 2. Buscar nodo de origen por ID y verificar grulla (inline)
+    nodo_origen_obj = None
+    for i in range(lt.size(nodos)):
+        nodo = lt.get_element(nodos, i)
+        if nodo["id"] == origen:
+            nodo_origen_obj = nodo
+            break
+    
     if nodo_origen_obj is None:
         return {
             "mensaje": f"El nodo de origen {origen} no existe.",
@@ -885,15 +756,15 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
             "destino": destino,
             "grulla": crane_id
         }
-    # Verificar si la grulla está presente en el nodo de origen (sin break)
+    
+    # Verificar si la grulla está en el nodo de origen
     grullas_origen = nodo_origen_obj["grullas"]
     presente = False
-    i = 0
-    while i < lt.size(grullas_origen) and not presente:
-        grulla_actual = lt.get_element(grullas_origen, i)
-        if grulla_actual == crane_id:
+    for i in range(lt.size(grullas_origen)):
+        if lt.get_element(grullas_origen, i) == crane_id:
             presente = True
-        i = i + 1
+            break
+    
     if not presente:
         return {
             "mensaje": f"La grulla {crane_id} no se encuentra en el nodo de origen {origen}.",
@@ -903,8 +774,8 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
         }
     # 3. DFS para encontrar camino
     dfs_result = DFS.dfs(grafo, origen)
-    tiene_camino = DFS.has_path_to(destino, dfs_result)
-    if not tiene_camino:
+    
+    if not DFS.has_path_to(destino, dfs_result):
         return {
             "mensaje": f"No existe un camino viable desde {origen} hasta {destino}.",
             "origen": origen,
@@ -912,36 +783,25 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
             "grulla": crane_id
         }
     # 4. Reconstrucción de camino desde pila DFS
-    camino_stack = DFS.path_to(destino, dfs_result)    
+    camino_stack = DFS.path_to(destino, dfs_result)
     camino = lt.new_list()
     while not st.is_empty(camino_stack):
-        nodo_actual = st.pop(camino_stack)
-        lt.add_last(camino, nodo_actual)
+        lt.add_last(camino, st.pop(camino_stack))
+    
     total_puntos = lt.size(camino)
-    # 5. Cálculo de distancia total usando pesos de arcos del grafo
+    
+    # 5. Calcular distancia total y construir detalles en un solo recorrido
     total_distancia = 0.0
-    nodos_cache = []
-    for i in range(total_puntos):
-        node_id = lt.get_element(camino, i)
-        node = buscar_nodo_por_id(nodos, node_id)
-        nodos_cache.append(node)
-        # Calcular distancia al siguiente nodo usando el peso del arco
-        hay_siguiente = i < total_puntos - 1        
-        if hay_siguiente:
-            next_id = lt.get_element(camino, i + 1)            
-            # Obtener peso del arco del grafo
-            vertex = gp.get_vertex(grafo, node_id)            
-            if vertex is not None:
-                edge = vtx.get_edge(vertex, next_id)                
-                if edge is not None:
-                    peso_arco = edge["weight"]
-                    total_distancia = total_distancia + peso_arco
-    # 6. Construir lista de detalles para TODOS los nodos
     detalles_completos = lt.new_list()
     for i in range(total_puntos):
-        nodo = nodos_cache[i]
-        if nodo is None:
-            detalle_vacio = {
+        node_id = lt.get_element(camino, i)
+        
+        # Buscar nodo actual usando buscar_nodo_por_id
+        nodo_actual = buscar_nodo_por_id(nodos, node_id)
+        
+        if nodo_actual is None:
+            # Detalle vacío si no se encuentra el nodo
+            lt.add_last(detalles_completos, {
                 "id": "Unknown",
                 "lat": "Unknown",
                 "lon": "Unknown",
@@ -949,63 +809,63 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
                 "first3": lt.new_list(),
                 "last3": lt.new_list(),
                 "dist_next": "Unknown"
-            }
-            lt.add_last(detalles_completos, detalle_vacio)
-        else:
-            tags = nodo["grullas"]
-            gsize = lt.size(tags)
-            # Extraer primeras 3 grullas
-            limite_g = 3
-            if gsize < 3:
-                limite_g = gsize                
-            first3 = lt.new_list()
-            for j in range(limite_g):
-                grulla = lt.get_element(tags, j)
-                lt.add_last(first3, grulla)
-            # Extraer últimas 3 grullas
-            last3 = lt.new_list()
-            inicio_last = gsize - 3
-            if inicio_last < 0:
-                inicio_last = 0                
-            for j in range(inicio_last, gsize):
-                grulla = lt.get_element(tags, j)
-                lt.add_last(last3, grulla)
-            # Distancia al siguiente nodo usando peso del arco
-            dist_sig = "Unknown"
-            es_ultimo = i == total_puntos - 1            
-            if es_ultimo:
-                dist_sig = "END"
-            else:
-                next_id = lt.get_element(camino, i + 1)
-                vertex = gp.get_vertex(grafo, nodo["id"])                
-                if vertex is not None:
-                    edge = vtx.get_edge(vertex, next_id)                    
-                    if edge is not None:
-                        dist_sig = edge["weight"]
-            detalle_nodo = {
-                "id": nodo["id"],
-                "lat": nodo["lat"],
-                "lon": nodo["lon"],
-                "num_grullas": gsize,
-                "first3": first3,
-                "last3": last3,
-                "dist_next": dist_sig
-            }
-            
-            lt.add_last(detalles_completos, detalle_nodo)
-    # 7. Crear lista combinada: primeros 5 + separador + últimos 5
-    limite = 5
-    if total_puntos < 5:
-        limite = total_puntos
-    detalles_para_mostrar = lt.new_list()    
-    # Agregar primeros 5
-    for i in range(limite):
-        detalle = lt.get_element(detalles_completos, i)
-        lt.add_last(detalles_para_mostrar, detalle)    
-    # Agregar separador solo si hay más de 10 nodos
-    hay_separador = total_puntos > 10
-    if hay_separador:
-        separador = {
+            })
+            continue
+        
+        # Obtener lista de grullas
+        tags = nodo_actual["grullas"]
+        gsize = lt.size(tags)
+        
+        # Extraer primeras 3 grullas
+        first3 = lt.new_list()
+        limite_first = min(3, gsize)
+        for j in range(limite_first):
+            lt.add_last(first3, lt.get_element(tags, j))
+        
+        # Extraer últimas 3 grullas
+        last3 = lt.new_list()
+        inicio_last = max(0, gsize - 3)
+        for j in range(inicio_last, gsize):
+            lt.add_last(last3, lt.get_element(tags, j))
+        
+        # Calcular distancia al siguiente nodo
+        dist_sig = "END"
+        if i < total_puntos - 1:
+            next_id = lt.get_element(camino, i + 1)
+            vertex = gp.get_vertex(grafo, node_id)
+            if vertex is not None:
+                edge = vtx.get_edge(vertex, next_id)
+                if edge is not None:
+                    peso_arco = edge["weight"]
+                    dist_sig = peso_arco
+                    total_distancia += peso_arco
+        
+        # Agregar detalle completo
+        lt.add_last(detalles_completos, {
+            "id": nodo_actual["id"],
+            "lat": nodo_actual["lat"],
+            "lon": nodo_actual["lon"],
+            "num_grullas": gsize,
+            "first3": first3,
+            "last3": last3,
+            "dist_next": dist_sig
+        })
+    
+    # 6. Crear lista combinada: primeros 5 + separador + últimos 5
+    detalles_para_mostrar = lt.new_list()
+    
+    # Si hay 10 o menos nodos, mostrar todos
+    if total_puntos <= 10:
+        for i in range(total_puntos):
+            lt.add_last(detalles_para_mostrar, lt.get_element(detalles_completos, i))
+    else:
+        # Más de 10 nodos: primeros 5 + separador + últimos 5
+        # Agregar primeros 5
+        for i in range(5):
+            lt.add_last(detalles_para_mostrar, lt.get_element(detalles_completos, i))
+        
+        # Agregar separador
+        lt.add_last(detalles_para_mostrar, {
             "id": "...",
             "lat": "...",
             "lon": "...",
@@ -1013,15 +873,14 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
             "first3": "...",
             "last3": "...",
             "dist_next": "..."
-        }
-        lt.add_last(detalles_para_mostrar, separador)
-    # Agregar últimos 5
-    inicio_ultimos = total_puntos - limite
-    for i in range(inicio_ultimos, total_puntos):
-        detalle = lt.get_element(detalles_completos, i)
-        lt.add_last(detalles_para_mostrar, detalle)
-    # 8. Respuesta final
-    resultado = {
+        })
+        
+        # Agregar últimos 5
+        for i in range(total_puntos - 5, total_puntos):
+            lt.add_last(detalles_para_mostrar, lt.get_element(detalles_completos, i))
+    
+    # 7. Respuesta final
+    return {
         "mensaje": f"Camino encontrado para la grulla {crane_id}.",
         "grulla": crane_id,
         "origen": origen,
@@ -1030,7 +889,6 @@ def req_1(catalog, lat_o, lon_o, lat_d, lon_d, crane_id):
         "total_puntos": total_puntos,
         "detalles_mostrar": detalles_para_mostrar
     }
-    return resultado
 
 
 def req_2(catalog, lat_o, lon_o, lat_d, lon_d, radio_km):
@@ -1295,15 +1153,10 @@ def req_4(catalog, lat_o, lon_o):
     Estima la red de puntos más cercanos a fuentes hídricas 
     que pueden usar los individuos para su migración desde un punto de inicio.
     Usa el algoritmo de Prim (MST) sobre el grafo de distancias a fuentes hídricas.
-    
-    Args:
-        catalog: catálogo con nodos y grafos
-        lat_o: latitud del punto de origen
-        lon_o: longitud del punto de origen
-    
-    Returns:
-        Diccionario con la información del corredor hídrico
     """
+    import math
+    from DataStructures.Map import priority_queue as pq
+    
     nodos = catalog["nodos"]
     grafo = catalog["grafo_2"]  # Grafo de distancias a fuentes hídricas
 
@@ -1319,31 +1172,89 @@ def req_4(catalog, lat_o, lon_o):
             "origen": origen
         }
 
-    # 2. Ejecutar algoritmo de Prim desde el origen
-    mst_result = ejecutar_prim(grafo, origen)
+    # 2. Ejecutar algoritmo de Prim desde el origen (inline)
+    vertices = gp.vertices(grafo)
+    num_vertices = lt.size(vertices)
 
-    if mst_result is None:
-        return {
-            "mensaje": f"No se pudo construir el MST desde el origen {origen}.",
-            "origen": origen
-        }
+    # Crear estructuras para Prim
+    marked = mp.new_map(num_vertices, 0.5)
+    edge_from = mp.new_map(num_vertices, 0.5)
+    dist_to = mp.new_map(num_vertices, 0.5)
+    heap = pq.new_heap(is_min_pq=True)
 
-    # 3. Extraer los nodos del MST
-    nodos_mst = extraer_nodos_mst(mst_result, grafo, origen)
+    # Inicializar todas las distancias a infinito
+    for i in range(num_vertices):
+        v = lt.get_element(vertices, i)
+        mp.put(marked, v, False)
+        mp.put(dist_to, v, math.inf)
+        mp.put(edge_from, v, None)
+
+    # El origen tiene distancia 0
+    mp.put(dist_to, origen, 0)
+    pq.insert(heap, 0, origen)
+
+    # Algoritmo de Prim
+    while not pq.is_empty(heap):
+        u = pq.remove(heap)
+        
+        ya_marcado = mp.get(marked, u)
+        if not ya_marcado:
+            mp.put(marked, u, True)
+
+            vertex = gp.get_vertex(grafo, u)
+            
+            if vertex is not None:
+                adjs = gp.adjacents(grafo, u)
+
+                for j in range(lt.size(adjs)):
+                    v = lt.get_element(adjs, j)
+                    v_marcado = mp.get(marked, v)
+                    
+                    if not v_marcado:
+                        edge = vtx.get_edge(vertex, v)
+                        
+                        if edge is not None:
+                            peso = edge["weight"]
+                            dist_actual = mp.get(dist_to, v)
+
+                            if peso < dist_actual:
+                                mp.put(dist_to, v, peso)
+                                mp.put(edge_from, v, {"from": u, "to": v, "weight": peso})
+                                
+                                existe_en_heap = pq.contains(heap, v)
+                                if existe_en_heap:
+                                    pq.improve_priority(heap, peso, v)
+                                else:
+                                    pq.insert(heap, peso, v)
+
+    # 3. Extraer nodos del MST y calcular distancia total (inline)
+    nodos_mst = lt.new_list()
+    distancia_total_agua = 0.0
+    
+    claves = mp.key_set(marked)
+    for i in range(lt.size(claves)):
+        nodo_id = lt.get_element(claves, i)
+        esta_marcado = mp.get(marked, nodo_id)
+        
+        if esta_marcado:
+            lt.add_last(nodos_mst, nodo_id)
+            
+            # Calcular distancia al mismo tiempo
+            edge = mp.get(edge_from, nodo_id)
+            if edge is not None:
+                distancia_total_agua += edge["weight"]
+    
     total_puntos = lt.size(nodos_mst)
 
-    # 4. Calcular distancia total a fuentes hídricas del MST
-    distancia_total_agua = calcular_distancia_total_mst(mst_result, nodos_mst)
-
-    # 5. Recolectar individuos únicos que usan el corredor
+    # 4. Recolectar individuos únicos que usan el corredor
     mapa_individuos = mp.new_map(100, 0.5)
 
     for i in range(total_puntos):
         nodo_id = lt.get_element(nodos_mst, i)
-        nodo = buscar_nodo_por_id(nodos, nodo_id)
+        nodo_actual = buscar_nodo_por_id(nodos, nodo_id)
 
-        if nodo is not None:
-            grullas = nodo["grullas"]
+        if nodo_actual is not None:
+            grullas = nodo_actual["grullas"]
             for j in range(lt.size(grullas)):
                 grulla_id = lt.get_element(grullas, j)
                 mp.put(mapa_individuos, grulla_id, True)
@@ -1351,91 +1262,76 @@ def req_4(catalog, lat_o, lon_o):
     lista_individuos = mp.key_set(mapa_individuos)
     total_individuos = lt.size(lista_individuos)
 
-    # 6. Construir lista de detalles para TODOS los nodos del MST
+    # 5. Construir lista de detalles para TODOS los nodos del MST
     detalles_completos = lt.new_list()
 
     for i in range(total_puntos):
         nodo_id = lt.get_element(nodos_mst, i)
-        nodo = buscar_nodo_por_id(nodos, nodo_id)
+        nodo_actual = buscar_nodo_por_id(nodos, nodo_id)
 
-        if nodo is None:
-            detalle_vacio = {
+        if nodo_actual is None:
+            lt.add_last(detalles_completos, {
                 "id": "Unknown",
                 "lat": "Unknown",
                 "lon": "Unknown",
                 "num_grullas": "Unknown",
                 "first3": lt.new_list(),
                 "last3": lt.new_list()
-            }
-            lt.add_last(detalles_completos, detalle_vacio)
+            })
         else:
-            tags = nodo["grullas"]
+            tags = nodo_actual["grullas"]
             gsize = lt.size(tags)
 
             # Extraer primeras 3 grullas
-            limite_g = 3
-            if gsize < 3:
-                limite_g = gsize
-                
             first3 = lt.new_list()
-            for j in range(limite_g):
-                grulla = lt.get_element(tags, j)
-                lt.add_last(first3, grulla)
+            limite_first = min(3, gsize)
+            for j in range(limite_first):
+                lt.add_last(first3, lt.get_element(tags, j))
 
             # Extraer últimas 3 grullas
             last3 = lt.new_list()
-            inicio_last = gsize - 3
-            if inicio_last < 0:
-                inicio_last = 0
-                
+            inicio_last = max(0, gsize - 3)
             for j in range(inicio_last, gsize):
-                grulla = lt.get_element(tags, j)
-                lt.add_last(last3, grulla)
+                lt.add_last(last3, lt.get_element(tags, j))
 
-            detalle_nodo = {
-                "id": nodo["id"],
-                "lat": nodo["lat"],
-                "lon": nodo["lon"],
+            lt.add_last(detalles_completos, {
+                "id": nodo_actual["id"],
+                "lat": nodo_actual["lat"],
+                "lon": nodo_actual["lon"],
                 "num_grullas": gsize,
                 "first3": first3,
                 "last3": last3
-            }
-            
-            lt.add_last(detalles_completos, detalle_nodo)
+            })
 
-    # 7. Crear lista combinada: primeros 5 + separador + últimos 5
-    limite = 5
-    if total_puntos < 5:
-        limite = total_puntos
-
+    # 6. Crear lista combinada: primeros 5 + separador + últimos 5
     detalles_para_mostrar = lt.new_list()
     
-    # Agregar primeros 5
-    for i in range(limite):
-        detalle = lt.get_element(detalles_completos, i)
-        lt.add_last(detalles_para_mostrar, detalle)
-    
-    # Agregar separador solo si hay más de 10 nodos
-    hay_separador = total_puntos > 10
-    if hay_separador:
-        separador = {
+    # Si hay 10 o menos nodos, mostrar todos
+    if total_puntos <= 10:
+        for i in range(total_puntos):
+            lt.add_last(detalles_para_mostrar, lt.get_element(detalles_completos, i))
+    else:
+        # Más de 10 nodos: primeros 5 + separador + últimos 5
+        # Agregar primeros 5
+        for i in range(5):
+            lt.add_last(detalles_para_mostrar, lt.get_element(detalles_completos, i))
+        
+        # Agregar separador
+        lt.add_last(detalles_para_mostrar, {
             "id": "...",
             "lat": "...",
             "lon": "...",
             "num_grullas": "...",
             "first3": "...",
             "last3": "..."
-        }
-        lt.add_last(detalles_para_mostrar, separador)
-    
-    # Agregar últimos 5
-    inicio_ultimos = total_puntos - limite
-    for i in range(inicio_ultimos, total_puntos):
-        detalle = lt.get_element(detalles_completos, i)
-        lt.add_last(detalles_para_mostrar, detalle)
+        })
+        
+        # Agregar últimos 5
+        for i in range(total_puntos - 5, total_puntos):
+            lt.add_last(detalles_para_mostrar, lt.get_element(detalles_completos, i))
 
-    # 8. Respuesta final
-    resultado = {
+    # 7. Respuesta final
+    return {
         "mensaje": f"Corredor hídrico construido desde el origen {origen}.",
         "origen": origen,
         "total_puntos": total_puntos,
@@ -1443,7 +1339,6 @@ def req_4(catalog, lat_o, lon_o):
         "distancia_total_agua": distancia_total_agua,
         "detalles_mostrar": detalles_para_mostrar
     }
-    return resultado
 
 def req5(catalog, lat_user, lon_user, radio_km):
 
