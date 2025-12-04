@@ -524,7 +524,7 @@ def print_req_5(control):
     if grafo_sel == "1":
         tipo = "distancia"
     elif grafo_sel == "2":
-        tipo = "hidrico"  # ✅ CAMBIO: tu req_5 espera "hidrico"
+        tipo = "hidrico"  #  CAMBIO: tu req_5 espera "hidrico"
     else:
         print("Opción inválida.\n")
         return
@@ -558,7 +558,7 @@ def print_req_5(control):
     print(f"- Nodo migratorio destino: {res['destino']}")
     print(f"- Costo total del camino : {round(res['costo_total'], 4)}")
     print(f"- Total de puntos (vértices): {res['total_puntos']}")
-    print(f"- Total de arcos : {res['total_arcos']}\n")  # ✅ CAMBIO: "total_arcos"
+    print(f"- Total de arcos : {res['total_arcos']}\n")  #  CAMBIO: "total_arcos"
 
     # ----------------------------------------
     # Mostrar tabla usando detalles_mostrar
@@ -566,7 +566,7 @@ def print_req_5(control):
     print("Nodos del recorrido (primeros 5 y últimos 5):\n")
     
     filas = []
-    detalles_mostrar = res["detalles_mostrar"]  # ✅ CAMBIO
+    detalles_mostrar = res["detalles_mostrar"]  #  CAMBIO
     
     for i in range(lt.size(detalles_mostrar)):
         nodo = lt.get_element(detalles_mostrar, i)
@@ -600,7 +600,7 @@ def print_req_5(control):
             last3_final = ", ".join(lista_last) if lista_last else "N/A"
         
         # Procesar peso siguiente
-        peso_sig = nodo.get("peso_siguiente")  # ✅ CAMBIO: no "dist_next"
+        peso_sig = nodo.get("peso_siguiente")  # CAMBIO: no "dist_next"
         if peso_sig == "Unknown" or peso_sig == "...":
             peso_final = peso_sig
         else:
