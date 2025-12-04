@@ -14,10 +14,6 @@ from DataStructures.Graph import vertex as vtx
 from DataStructures.Stack import stack as st
 from DataStructures.Graph import dijsktra as dk
 from DataStructures.Stack import stack as stack
-from DataStructures.List import array_list as lt
-from DataStructures.Graph import digraph as dg
-from DataStructures.Graph import dijsktra as dij
-from DataStructures.Stack import stack
 # =============================================================================
 # ----------------------------- ESTRUCTURA PRINCIPAL --------------------------
 # =============================================================================
@@ -1539,6 +1535,7 @@ def req_5(catalog, lat_o, lon_o, lat_d, lon_d, tipo):
         
         # Manejar caso de nodo no encontrado
         if nodo is None:
+            # Si el nodo no existe, construir la estructura con valores desconocidos
             info = {
                 "id": nid,
                 "lat": "Unknown",
@@ -1548,51 +1545,51 @@ def req_5(catalog, lat_o, lon_o, lat_d, lon_d, tipo):
                 "last3": lt.new_list(),
                 "peso_siguiente": "Unknown"
             }
-            lt.add_last(detalles_completos, info)
-            continue
         
-        # Extraer información de grullas del nodo
-        tags = nodo["grullas"]
-        gsize = lt.size(tags)
-        
-        # Construir lista de primeras 3 grullas
-        first3 = lt.new_list()
-        limite_first = min(3, gsize)
-        for j in range(limite_first):
-            lt.add_last(first3, lt.get_element(tags, j))
-        
-        # Construir lista de últimas 3 grullas
-        last3 = lt.new_list()
-        inicio_last = max(0, gsize - 3)
-        for j in range(inicio_last, gsize):
-            lt.add_last(last3, lt.get_element(tags, j))
-        
-        # Calcular peso al siguiente nodo usando el grafo seleccionado
-        peso_siguiente = "Unknown"
-        if i < total_puntos - 1:
-            next_id = lt.get_element(camino, i + 1)
+        else:
+            # Extraer información de grullas del nodo válido
+            tags = nodo["grullas"]
+            gsize = lt.size(tags)
             
-            # Obtener peso del arco del grafo
-            peso_arco = get_edge_weight(grafo, nid, next_id)
+            # Construir lista de primeras 3 grullas
+            first3 = lt.new_list()
+            limite_first = min(3, gsize)
+            for j in range(limite_first):
+                lt.add_last(first3, lt.get_element(tags, j))
             
-            if peso_arco is not None:
-                peso_siguiente = peso_arco
-            else:
-                # Este caso no debería ocurrir en un camino válido de Dijkstra
-                # pero lo manejamos por seguridad
-                peso_siguiente = "Unknown"
+            # Construir lista de últimas 3 grullas
+            last3 = lt.new_list()
+            inicio_last = max(0, gsize - 3)
+            for j in range(inicio_last, gsize):
+                lt.add_last(last3, lt.get_element(tags, j))
+            
+            # Calcular peso al siguiente nodo usando el grafo seleccionado
+            peso_siguiente = "Unknown"
+            if i < total_puntos - 1:
+                next_id = lt.get_element(camino, i + 1)
+                
+                # Obtener peso del arco del grafo
+                peso_arco = get_edge_weight(grafo, nid, next_id)
+                
+                if peso_arco is not None:
+                    peso_siguiente = peso_arco
+                else:
+                    # Este caso no debería ocurrir en un camino válido de Dijkstra,
+                    # pero se maneja por seguridad.
+                    peso_siguiente = "Unknown"
+            
+            # Construir diccionario con información del nodo válido
+            info = {
+                "id": nodo["id"],
+                "lat": nodo["lat"],
+                "lon": nodo["lon"],
+                "num_grullas": gsize,
+                "first3": first3,
+                "last3": last3,
+                "peso_siguiente": peso_siguiente
+            }
         
-        # Construir diccionario con información del nodo
-        info = {
-            "id": nodo["id"],
-            "lat": nodo["lat"],
-            "lon": nodo["lon"],
-            "num_grullas": gsize,
-            "first3": first3,
-            "last3": last3,
-            "peso_siguiente": peso_siguiente
-        }
-        
+        # Agregar el diccionario info (sea nodo válido o no) a la lista final
         lt.add_last(detalles_completos, info)
     
     # PASO 7: Crear lista para mostrar (primeros 5 + separador + últimos 5)
