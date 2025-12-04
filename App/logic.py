@@ -1365,66 +1365,52 @@ def req_4(catalog, lat_o, lon_o):
         "detalles_mostrar": detalles_para_mostrar
     }
 
-def req_5(catalog, lat_user, lon_user, radio_km):
+def req_5(catalog, lat_o, lon_o, lat_d, lon_d, tipo):
 
     nodos = catalog["nodos"]
-    grafo = catalog["grafo_1"]  # se usa el grafo de distancias
-    g2 = catalog["grafo_2"]     # para el check de "seguro hacia el este"
 
-    # 1) Nodo más cercano al usuario
-    origen = buscar_nodo_mas_cercano(nodos, lat_user, lon_user)
+    # 1. Encontrar nodos más cercanos
+    nodo_origen = buscar_nodo_mas_cercano(nodos, lat_o, lon_o)
+    nodo_destino = buscar_nodo_mas_cercano(nodos, lat_d, lon_d)
 
-    # 2) Ejecutar Dijkstra usando la estructura del curso
-    resultado = dk.dijkstra(grafo, origen)
-
-    # 3) Hallar todos los nodos dentro del radio
-    dentro = nodos_en_radio(nodos, origen, radio_km)
-
-    # 4) De todos los nodos dentro del radio, elegir el más lejano (según Dijkstra)
-    mejor = None
-    mejor_dist = -1
-
-    for i in range(lt.size(dentro)):
-        destino = lt.get_element(dentro, i)
-        d = dk.dist_to(resultado, destino)
-
-        if d is not None and d > mejor_dist:
-            mejor_dist = d
-            mejor = destino
-
-    if mejor is None:
+    if nodo_origen is None or nodo_destino is None:
         return None
 
-    # 5) Obtener camino origen → mejor (solo con las estructuras del curso)
-    camino = dk.path_to(resultado, mejor)
-
-    # 6) Medir seguridad (promedio de agua en g2)
-    seguridad_total = 0
-    saltos = 0
-
-    for i in range(lt.size(camino) - 1):
-        u = lt.get_element(camino, i)
-        v = lt.get_element(camino, i + 1)
-
-        w = gp.get_edge_weight(g2, u, v)
-        seguridad_total += w
-        saltos += 1
-
-    if saltos > 0:
-        seguridad_prom = seguridad_total / saltos
+    # 2. Seleccionar grafo
+    if tipo == "1":
+        grafo = catalog["grafo_1"]
     else:
-        seguridad_prom = 0
+        grafo = catalog["grafo_2"]
 
-    # 7) Preparar respuesta homogénea con REQ 2
+    # 3. Ejecutar Dijkstra del módulo DataStructures.Graph.dijsktra
+    resultado = dk.Dijkstra(grafo, nodo_origen)
+
+    # 4. Extraer camino
+    path = dk.pathTo(resultado, nodo_destino)
+
+    if path is None:
+        return {
+            "origen": nodo_origen,
+            "destino": nodo_destino,
+            "distancia_total": None,
+            "camino": None
+        }
+
+    # 5. Convertir pila a lista
+    camino = lt.new_list()
+    distancia_total = 0
+
+    while not st.is_empty(path):
+        paso = st.pop(path)
+        lt.add_last(camino, paso["vertex"])
+        distancia_total = paso["distance"]
+
     return {
-        "origen": origen,
-        "destino": mejor,
-        "distancia_total": mejor_dist,
-        "camino": camino,
-        "saltos": lt.size(camino),
-        "seguridad_prom": seguridad_prom
+        "origen": nodo_origen,
+        "destino": nodo_destino,
+        "distancia_total": distancia_total,
+        "camino": camino
     }
-
 
 def req_6(catalog):
     """
