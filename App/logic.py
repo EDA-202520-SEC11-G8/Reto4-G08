@@ -380,7 +380,7 @@ def topological_sort(graph):
         for j in range(lt.size(adjs)):
             w = lt.get_element(adjs, j)
             mp.put(indeg, w, mp.get(indeg, w) + 1)
-        
+
 
     # cola de nodos con indegree 0
     cero = lt.new_list()
@@ -723,10 +723,14 @@ def calcular_estadisticas_subred(id_subred, lista_ids, catalogo_nodos):
         if nodo is not None:
             # Actualizar coordenadas extremas
             lat, lon = nodo["lat"], nodo["lon"]
-            if lat < min_lat: min_lat = lat
-            if lat > max_lat: max_lat = lat
-            if lon < min_lon: min_lon = lon
-            if lon > max_lon: max_lon = lon
+            if lat < min_lat: 
+                min_lat = lat
+            if lat > max_lat: 
+                max_lat = lat
+            if lon < min_lon: 
+                min_lon = lon
+            if lon > max_lon: 
+                max_lon = lon
             
             # Recolectar grullas
             tags = nodo["grullas"]
@@ -778,7 +782,7 @@ def calcular_estadisticas_subred(id_subred, lista_ids, catalogo_nodos):
 
     return {
         "id_subred": id_subred,
-        "total_nodos": total_nodos_ids, # Mantenemos el total teórico para el reporte
+        "total_nodos": total_nodos_ids,
         "total_individuos": total_grullas,
         "rango_lat": (min_lat, max_lat),
         "rango_lon": (min_lon, max_lon),
@@ -1329,15 +1333,6 @@ def req_3(catalog):
 
         nodo = buscar_nodo_por_id(nodos, nid)
 
-        # Si por alguna razón el nodo no existe
-        if nodo is None:
-            nodo = {
-                "id": nid,
-                "lat": "Unknown",
-                "lon": "Unknown",
-                "grullas": lt.new_list()
-            }
-
         grullas = nodo["grullas"]
         
         # registrar individuos únicos
@@ -1350,13 +1345,19 @@ def req_3(catalog):
         first3 = lt.new_list()
         last3 = lt.new_list()
 
+        
+        if gsize >= 3:
+            limite_first = 3 
+            inicio_last = gsize - 3  
+        else:
+            limite_first = gsize
+            limite_first = 0
+            
         # primeras 3
-        limite_first = 3 if gsize >= 3 else gsize
         for f in range(limite_first):
             lt.add_last(first3, lt.get_element(grullas, f))
 
         # últimas 3
-        inicio_last = gsize - 3 if gsize >= 3 else 0
         for f in range(inicio_last, gsize):
             lt.add_last(last3, lt.get_element(grullas, f))
         
